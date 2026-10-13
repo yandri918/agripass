@@ -14,6 +14,9 @@ const BatchIntakeSchema = z.object({
   harvestDate: z.string().nullable().optional(),
   notes: z.string().optional(),
   claimText: z.string().optional(),
+  freshnessScore: z.number().optional(),
+  freshnessGrade: z.string().optional(),
+  inspectionPhoto: z.string().optional(),
 });
 
 export async function GET() {

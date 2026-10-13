@@ -66,6 +66,9 @@ export interface Batch {
   unitCost: number; // (purchaseCost + freightCost + prepCost) / salableQty
   status: BatchStatus;
   notes: string;
+  freshnessScore?: number;
+  freshnessGrade?: string;
+  inspectionPhoto?: string;
   createdAt: string;
   updatedAt: string;
 }

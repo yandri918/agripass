@@ -50,3 +50,16 @@ export const ProductQaResponseSchema = z.object({
 });
 
 export type ProductQaResponse = z.infer<typeof ProductQaResponseSchema>;
+
+// Skema Inspeksi Visual Kesegaran Sayur (Gemini Vision Multimodal)
+export const VisualInspectionResponseSchema = z.object({
+  productNameGuess: z.string().describe("Tebakan jenis sayuran dari foto"),
+  freshnessScore: z.number().min(0).max(100).describe("Skor kesegaran 0 - 100"),
+  freshnessGrade: z.enum(["PRIMA", "BAIK", "CUKUP", "LAYU"]),
+  estimatedDamagePercent: z.number().min(0).max(100).describe("Estimasi persentase susut/kerusakan daun (%)"),
+  visualObservations: z.array(z.string()).describe("Observasi ciri fisik yang tampak pada foto"),
+  suggestedHandling: z.string().describe("Saran penanganan awal penjual agar tetap awet segar"),
+  suggestedQualityClaim: z.string().describe("Klaim mutu paspor yang cocok dicantumkan ke pelanggan"),
+});
+
+export type VisualInspectionResponse = z.infer<typeof VisualInspectionResponseSchema>;

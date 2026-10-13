@@ -20,6 +20,7 @@ import {
   Copy,
   Check,
   Settings,
+  Camera,
 } from "lucide-react";
 import { ProductQaResponse } from "@/lib/ai/types";
 
@@ -318,6 +319,34 @@ export default function ProductPassportPage({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* AI Visual Inspection Badge & Photo Proof */}
+              {activeBatch?.freshnessScore && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/90 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-950">
+                      <Sparkles className="w-4 h-4 text-emerald-700" />
+                      <span>Inspeksi Kesegaran AI Terverifikasi</span>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full font-black text-xs bg-emerald-200/80 text-emerald-900">
+                      🌿 Skor: {activeBatch.freshnessScore}% ({activeBatch.freshnessGrade || "PRIMA"})
+                    </span>
+                  </div>
+
+                  {activeBatch.inspectionPhoto && (
+                    <div className="relative rounded-xl overflow-hidden border border-emerald-200 max-h-48">
+                      <img
+                        src={activeBatch.inspectionPhoto}
+                        alt="Bukti Foto Sortasi Subuh"
+                        className="w-full h-44 object-cover"
+                      />
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-[10px] text-white font-medium backdrop-blur-xs flex items-center gap-1">
+                        <Camera className="w-3 h-3 text-lime-400" /> Foto Aktual Sortasi Subuh
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

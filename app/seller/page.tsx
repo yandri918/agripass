@@ -18,8 +18,14 @@ import {
   Check,
   X,
   ExternalLink,
+  Camera,
+  Sparkles,
+  Upload,
+  Eye,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Batch, Order, Product, Supplier } from "@/lib/data/types";
+import { VisualInspectionResponse } from "@/lib/ai/types";
 
 export default function SellerDashboardPage() {
   const [activeTab, setActiveTab] = useState<"today" | "intake" | "products" | "orders">("today");
@@ -42,6 +48,13 @@ export default function SellerDashboardPage() {
   const [harvestDate, setHarvestDate] = useState("");
   const [claimText, setClaimText] = useState("");
   const [submittingIntake, setSubmittingIntake] = useState(false);
+
+  // Visual Inspection AI State (Gemini Vision Multimodal)
+  const [inspectionImage, setInspectionImage] = useState<string | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectionResult, setInspectionResult] = useState<(VisualInspectionResponse & { suggestedDamageQty?: number }) | null>(null);
+  const [inspectionApplied, setInspectionApplied] = useState(false);
+  const [selectedPhotoModal, setSelectedPhotoModal] = useState<string | null>(null);
 
   // Weighed modal state
   const [weighingOrder, setWeighingOrder] = useState<Order | null>(null);
@@ -92,6 +105,58 @@ export default function SellerDashboardPage() {
   const liveUnitCost =
     liveSalableQty > 0 ? Math.round((liveTotalBatchCost / liveSalableQty) * 100) / 100 : 0;
 
+  // Visual Inspection Handlers (Gemini Vision)
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64Data = reader.result as string;
+      setInspectionImage(base64Data);
+      setInspectionResult(null);
+      setInspectionApplied(false);
+      runVisualInspection(base64Data, file.type);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const runVisualInspection = async (imageDataUrl: string, mimeType: string = "image/jpeg") => {
+    setInspecting(true);
+    try {
+      const res = await fetch("/api/ai/inspect-produce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: imageDataUrl,
+          mimeType,
+          productName: currentProduct?.name,
+          receivedQty,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setInspectionResult(data);
+      }
+    } catch (err) {
+      console.error("Gagal inspeksi visual AI:", err);
+    } finally {
+      setInspecting(false);
+    }
+  };
+
+  const handleApplyInspection = () => {
+    if (!inspectionResult) return;
+    if (typeof inspectionResult.suggestedDamageQty === "number") {
+      setInitialDamageQty(inspectionResult.suggestedDamageQty);
+    }
+    if (inspectionResult.suggestedQualityClaim) {
+      setClaimText(inspectionResult.suggestedQualityClaim);
+    }
+    setInspectionApplied(true);
+  };
+
   // Handle Intake Submit
   const handleIntakeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +180,9 @@ export default function SellerDashboardPage() {
           origin: origin || undefined,
           harvestDate: harvestDate || null,
           claimText: claimText || undefined,
+          freshnessScore: inspectionResult?.freshnessScore,
+          freshnessGrade: inspectionResult?.freshnessGrade,
+          inspectionPhoto: inspectionImage || undefined,
         }),
       });
 
@@ -126,6 +194,9 @@ export default function SellerDashboardPage() {
         setReceivedQty(10);
         setInitialDamageQty(0);
         setClaimText("");
+        setInspectionImage(null);
+        setInspectionResult(null);
+        setInspectionApplied(false);
       } else {
         const err = await res.json();
         alert(err.error || "Gagal mencatat barang masuk");
@@ -443,6 +514,114 @@ export default function SellerDashboardPage() {
                 <h3 className="font-bold text-slate-900 text-sm">Pencatatan Batch Barang Masuk</h3>
               </div>
 
+              {/* Box Inspeksi Visual AI (Multimodal Gemini Vision) */}
+              <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-teal-50/60 rounded-xl border border-emerald-200/90 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-emerald-950 font-bold text-xs">
+                    <Camera className="w-4 h-4 text-emerald-700" />
+                    <span>Inspeksi Visual AI (Gemini Vision)</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> Auto-Sortasi
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Ambil foto sayuran dari kamera HP/laptop saat barang datang. AI akan menaksir skor kesegaran dan persentase kerusakan sortasi subuh.
+                </p>
+
+                {/* Upload or Camera Button */}
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 cursor-pointer py-2 px-3 bg-white hover:bg-slate-50 border border-emerald-300 rounded-lg text-emerald-800 text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition">
+                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{inspectionImage ? "Ganti Foto Sayur" : "Foto / Upload Sayur"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {inspectionImage && !inspecting && (
+                    <button
+                      type="button"
+                      onClick={() => runVisualInspection(inspectionImage)}
+                      className="py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Re-Scan
+                    </button>
+                  )}
+                </div>
+
+                {/* Image Preview & Scan Spinner */}
+                {inspectionImage && (
+                  <div className="relative rounded-lg overflow-hidden border border-emerald-300 bg-black/5">
+                    <img
+                      src={inspectionImage}
+                      alt="Sayur yang diinspeksi"
+                      className="w-full h-32 object-cover rounded-lg"
+                    />
+                    {inspecting && (
+                      <div className="absolute inset-0 bg-emerald-950/70 backdrop-blur-xs flex flex-col items-center justify-center text-white text-center p-3 space-y-1.5 animate-pulse">
+                        <Sparkles className="w-5 h-5 text-lime-400 animate-spin" />
+                        <span className="font-bold text-xs">Menganalisis Visual Sayur...</span>
+                        <span className="text-[10px] text-emerald-200">Menghitung kesegaran daun & susut sortasi</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Hasil Inspeksi AI */}
+                {inspectionResult && (
+                  <div className="p-2.5 bg-white rounded-lg border border-emerald-200 space-y-2 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800">Skor Kesegaran:</span>
+                      <span className="px-2 py-0.5 rounded-full font-black text-xs bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                        🌿 {inspectionResult.freshnessScore}% ({inspectionResult.freshnessGrade})
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-700">
+                      <span>Estimasi Susut Sortasi:</span>
+                      <span className="font-bold text-red-600">
+                        {inspectionResult.estimatedDamagePercent}% (~{inspectionResult.suggestedDamageQty} {currentProduct?.saleUnit})
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 space-y-1">
+                      <div className="font-semibold text-slate-700">Observasi Fisik AI:</div>
+                      <ul className="list-disc pl-3.5 space-y-0.5">
+                        {inspectionResult.visualObservations.map((obs, idx) => (
+                          <li key={idx}>{obs}</li>
+                        ))}
+                      </ul>
+                      {inspectionResult.suggestedHandling && (
+                        <div className="pt-1 text-emerald-800 font-medium">
+                          💡 <span className="font-bold">Saran:</span> {inspectionResult.suggestedHandling}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleApplyInspection}
+                      disabled={inspectionApplied}
+                      className="w-full py-1.5 px-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {inspectionApplied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-lime-400" /> Diterapkan ke Form
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" /> Terapkan Estimasi ke Form Intake
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <form onSubmit={handleIntakeSubmit} className="space-y-3 text-xs">
                 <div>
                   <label className="text-slate-600 block mb-1 font-semibold">Pilih Komoditas Produk *</label>
@@ -586,6 +765,7 @@ export default function SellerDashboardPage() {
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
                       <th className="p-2.5">Produk & Batch</th>
+                      <th className="p-2.5">Kesegaran AI</th>
                       <th className="p-2.5">Diterima / Rusak</th>
                       <th className="p-2.5">Layak Jual</th>
                       <th className="p-2.5">Biaya Pokok / Unit</th>
@@ -599,6 +779,27 @@ export default function SellerDashboardPage() {
                         <td className="p-2.5">
                           <div className="font-bold text-slate-900">{b.product.name}</div>
                           <div className="text-[10px] font-mono text-slate-400">{b.publicId}</div>
+                        </td>
+                        <td className="p-2.5">
+                          {b.freshnessScore ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-emerald-100 text-emerald-800 font-bold whitespace-nowrap">
+                                🌿 {b.freshnessScore}%
+                              </span>
+                              {b.inspectionPhoto && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPhotoModal(b.inspectionPhoto || null)}
+                                  className="text-slate-400 hover:text-emerald-700 transition"
+                                  title="Lihat Foto Inspeksi Visual"
+                                >
+                                  <ImageIcon className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">-</span>
+                          )}
                         </td>
                         <td className="p-2.5">
                           {b.receivedQty} / <span className="text-red-500">{b.initialDamageQty}</span> {b.product.saleUnit}
@@ -862,6 +1063,37 @@ export default function SellerDashboardPage() {
                 Simpan & Update Total
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Inspection Modal */}
+      {selectedPhotoModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                Foto Inspeksi Visual Sortasi
+              </h4>
+              <button
+                onClick={() => setSelectedPhotoModal(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={selectedPhotoModal}
+              alt="Foto Inspeksi Sayur"
+              className="w-full h-56 object-cover rounded-xl border border-slate-100"
+            />
+            <button
+              onClick={() => setSelectedPhotoModal(null)}
+              className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+            >
+              Tutup
+            </button>
           </div>
         </div>
       )}

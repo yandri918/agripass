@@ -159,6 +159,9 @@ export const dataStore = {
     harvestDate?: string | null;
     notes?: string;
     claimText?: string;
+    freshnessScore?: number;
+    freshnessGrade?: string;
+    inspectionPhoto?: string;
   }): Batch {
     const product = db.products.find((p) => p.id === input.productId);
     if (!product) throw new Error("Produk tidak valid");
@@ -191,6 +194,9 @@ export const dataStore = {
       unitCost: unitCost,
       status: "ACTIVE",
       notes: input.notes || `Penerimaan ${input.receivedQty} ${product.saleUnit}`,
+      freshnessScore: input.freshnessScore,
+      freshnessGrade: input.freshnessGrade,
+      inspectionPhoto: input.inspectionPhoto,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
