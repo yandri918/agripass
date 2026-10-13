@@ -63,3 +63,29 @@ export const VisualInspectionResponseSchema = z.object({
 });
 
 export type VisualInspectionResponse = z.infer<typeof VisualInspectionResponseSchema>;
+
+// Skema Rekomendasi Restock & Pengelolaan Umur Simpan (Gemini AI Inventory)
+export const RestockRecommendationSchema = z.object({
+  summary: z.string().describe("Ringkasan kondisi inventori dan saran belanja pasar induk subuh"),
+  marketShoppingListText: z.string().describe("Format daftar belanja teks siap salin ke WhatsApp/catatan pasar"),
+  urgentRestock: z.array(
+    z.object({
+      productName: z.string(),
+      currentStock: z.number(),
+      saleUnit: z.string(),
+      recommendedRestockQty: z.number(),
+      reason: z.string(),
+      urgency: z.enum(["KRITIS", "TINGGI", "SEDANG"]),
+    })
+  ),
+  freshnessRiskItems: z.array(
+    z.object({
+      productName: z.string(),
+      batchAgeHours: z.number(),
+      action: z.string(),
+    })
+  ),
+  generalAdvice: z.string().describe("Tips mitigasi susut sayuran untuk hari esok"),
+});
+
+export type RestockRecommendation = z.infer<typeof RestockRecommendationSchema>;

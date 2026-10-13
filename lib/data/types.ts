@@ -153,3 +153,72 @@ export interface ProductClaim {
   publicationStatus: "PUBLISHED" | "DRAFT";
   createdAt: string;
 }
+
+export interface StockOverview {
+  totalProducts: number;
+  totalActiveBatches: number;
+  totalPhysicalQty: number;
+  totalReservedQty: number;
+  totalAvailableQty: number;
+  totalStockValueIdr: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  totalSpoilageQty: number;
+}
+
+export interface InventoryItemBatch {
+  id: string;
+  publicId: string;
+  salableQty: number;
+  unitCost: number;
+  receivedAt: string;
+  origin: string | null;
+  supplierName: string | null;
+  freshnessGrade?: string;
+  freshnessScore?: number;
+  inspectionPhoto?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  publicId: string;
+  name: string;
+  aliases: string;
+  category: string;
+  saleUnit: string;
+  priceIdr: number;
+  published: boolean;
+  physicalQty: number;
+  reservedQty: number;
+  availableQty: number;
+  activeBatchCount: number;
+  status: "SAFE" | "LOW" | "OUT";
+  oldestBatchDate: string | null;
+  oldestBatchAgeHours: number | null;
+  stockValueIdr: number;
+  batches: InventoryItemBatch[];
+}
+
+export interface StockMovementWithDetails {
+  id: string;
+  batchId: string;
+  batchPublicId: string;
+  productId: string;
+  productName: string;
+  saleUnit: string;
+  type: MovementType;
+  quantity: number;
+  reason: string;
+  orderId?: string | null;
+  actorId?: string;
+  createdAt: string;
+}
+
+export interface StockAdjustmentInput {
+  batchId?: string;
+  productId?: string;
+  type: MovementType;
+  quantity: number;
+  reason: string;
+  actorId?: string;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -24,12 +24,35 @@ import {
   Eye,
   Image as ImageIcon,
   Lock,
+  Boxes,
+  History,
+  Search,
+  Filter,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  ArrowDownRight,
+  ArrowUpRight,
+  Layers,
+  FileText,
+  AlertOctagon,
+  Database,
+  Download,
 } from "lucide-react";
-import { Batch, Order, Product, Supplier } from "@/lib/data/types";
-import { VisualInspectionResponse } from "@/lib/ai/types";
+import {
+  Batch,
+  InventoryItem,
+  MovementType,
+  Order,
+  Product,
+  StockMovementWithDetails,
+  StockOverview,
+  Supplier,
+} from "@/lib/data/types";
+import { RestockRecommendation, VisualInspectionResponse } from "@/lib/ai/types";
 
 export default function SellerDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"today" | "intake" | "products" | "orders">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "stock" | "intake" | "products" | "orders">("today");
 
   // Seller Authentication Gate (PIN)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -75,6 +98,37 @@ export default function SellerDashboardPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Stock Management States
+  const [stockOverview, setStockOverview] = useState<StockOverview | null>(null);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovementWithDetails[]>([]);
+  const [stockSearch, setStockSearch] = useState<string>("");
+  const [stockCategoryFilter, setStockCategoryFilter] = useState<string>("ALL");
+  const [stockStatusFilter, setStockStatusFilter] = useState<string>("ALL");
+  const [stockSubTab, setStockSubTab] = useState<"inventory" | "movements">("inventory");
+  const [expandedBatchProductId, setExpandedBatchProductId] = useState<string | null>(null);
+
+  // Stock Adjustment Modal States
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [selectedAdjustProduct, setSelectedAdjustProduct] = useState<InventoryItem | null>(null);
+  const [adjustBatchId, setAdjustBatchId] = useState<string>("");
+  const [adjustType, setAdjustType] = useState<MovementType>("SPOILAGE_POST");
+  const [adjustQuantity, setAdjustQuantity] = useState<number>(1);
+  const [adjustReason, setAdjustReason] = useState<string>("Daun layu / sortasi sore hari");
+  const [submittingAdjust, setSubmittingAdjust] = useState(false);
+
+  // AI Restock Assistant States
+  const [isAiRestockOpen, setIsAiRestockOpen] = useState(false);
+  const [loadingAiRestock, setLoadingAiRestock] = useState(false);
+  const [aiRestockData, setAiRestockData] = useState<RestockRecommendation | null>(null);
+  const [copiedShoppingList, setCopiedShoppingList] = useState(false);
+  const [dbInfo, setDbInfo] = useState<{
+    filePath: string;
+    fileSizeKb: number;
+    lastModified: string | null;
+    counts: { products: number; batches: number; stockMovements: number; orders: number };
+  } | null>(null);
+
   // Intake Form State
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
@@ -100,10 +154,12 @@ export default function SellerDashboardPage() {
 
   const loadAllData = async () => {
     try {
-      const [prodRes, batchRes, orderRes] = await Promise.all([
+      const [prodRes, batchRes, orderRes, stockRes, dbRes] = await Promise.all([
         fetch("/api/public/shops/berkah-mandiri/products"),
         fetch("/api/seller/batches"),
         fetch("/api/seller/orders"),
+        fetch("/api/seller/stock"),
+        fetch("/api/seller/database"),
       ]);
 
       if (prodRes.ok) {
@@ -118,10 +174,121 @@ export default function SellerDashboardPage() {
         const d = await orderRes.json();
         setOrders(d.orders);
       }
+      if (stockRes.ok) {
+        const d = await stockRes.json();
+        setStockOverview(d.overview);
+        setInventoryItems(d.items);
+        setStockMovements(d.movements);
+      }
+      if (dbRes.ok) {
+        const d = await dbRes.json();
+        if (d.success) setDbInfo(d.info);
+      }
     } catch (err) {
       console.error("Gagal memuat data dashboard:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Stock Management Action Handlers
+  const openAdjustModal = (item?: InventoryItem) => {
+    const target = item || inventoryItems[0] || null;
+    setSelectedAdjustProduct(target);
+    setAdjustBatchId("");
+    setAdjustType("SPOILAGE_POST");
+    setAdjustQuantity(1);
+    setAdjustReason("Daun layu / sortasi sore hari");
+    setIsAdjustModalOpen(true);
+  };
+
+  const handleAdjustStockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAdjustProduct || adjustQuantity <= 0) {
+      alert("Pilih produk dan masukkan kuantitas yang valid.");
+      return;
+    }
+
+    setSubmittingAdjust(true);
+    try {
+      const res = await fetch("/api/seller/stock/adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: selectedAdjustProduct.id,
+          batchId: adjustBatchId || undefined,
+          type: adjustType,
+          quantity: adjustQuantity,
+          reason: adjustReason || "Penyesuaian stok oleh penjual",
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        setIsAdjustModalOpen(false);
+        loadAllData();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Gagal melakukan penyesuaian stok");
+      }
+    } catch (err) {
+      console.error("Gagal submit adjust stok:", err);
+    } finally {
+      setSubmittingAdjust(false);
+    }
+  };
+
+  const handleTriggerAiRestock = async () => {
+    setLoadingAiRestock(true);
+    setIsAiRestockOpen(true);
+    try {
+      const res = await fetch("/api/seller/stock/ai-restock", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setAiRestockData(data.recommendation);
+      } else {
+        alert("Gagal memuat rekomendasi restock AI.");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingAiRestock(false);
+    }
+  };
+
+  const handleCopyShoppingList = () => {
+    if (!aiRestockData?.marketShoppingListText) return;
+    navigator.clipboard.writeText(aiRestockData.marketShoppingListText);
+    setCopiedShoppingList(true);
+    setTimeout(() => setCopiedShoppingList(false), 2500);
+  };
+
+  const handleResetDatabase = async () => {
+    if (
+      !confirm(
+        "Apakah Anda yakin ingin mereset database ke data awal seed demo? Semua mutasi stok, batch, dan pesanan baru akan dikembalikan ke kondisi awal."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/seller/database", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset" }),
+      });
+
+      if (res.ok) {
+        alert("Database berhasil direset ke data awal seed!");
+        loadAllData();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Gagal mereset database");
+      }
+    } catch (err) {
+      console.error("Gagal reset database:", err);
     }
   };
 
@@ -405,6 +572,15 @@ export default function SellerDashboardPage() {
             <p className="text-xs text-emerald-300/80 mt-1">
               Pencatatan batch masuk, kalkulasi biaya pokok, reservasi stok & draf pesanan AI.
             </p>
+            <div className="flex flex-wrap items-center gap-2 mt-2.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-900/90 text-[11px] font-semibold text-lime-300 border border-emerald-700/60 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-lime-400 animate-pulse" />
+                Database Anti-Hilang: Aktif ({dbInfo?.fileSizeKb ?? 34} KB)
+              </span>
+              <span className="text-[11px] text-emerald-300/80">
+                Disk storage atomik • {dbInfo?.counts.stockMovements ?? stockMovements.length} mutasi tersimpan
+              </span>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -448,6 +624,23 @@ export default function SellerDashboardPage() {
             {submittedOrdersCount > 0 && (
               <span className="w-5 h-5 rounded-full bg-lime-500 text-emerald-950 text-[10px] font-black flex items-center justify-center">
                 {submittedOrdersCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("stock")}
+            className={`py-3.5 px-2 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+              activeTab === "stock"
+                ? "border-emerald-800 text-emerald-800"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            Manajemen Stok
+            {((stockOverview?.outOfStockCount || 0) + (stockOverview?.lowStockCount || 0)) > 0 && (
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center">
+                {(stockOverview?.outOfStockCount || 0) + (stockOverview?.lowStockCount || 0)}
               </span>
             )}
           </button>
@@ -511,12 +704,20 @@ export default function SellerDashboardPage() {
                 <div className="text-[11px] text-slate-500 mt-1">Sedang disiapkan / timbang</div>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                <div className="text-xs font-semibold text-slate-400">Stok Menipis (≤ 5)</div>
-                <div className="text-2xl font-black text-amber-600 mt-1">
-                  {lowStockProducts.length} sayuran
+              <div
+                onClick={() => setActiveTab("stock")}
+                className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm cursor-pointer hover:border-amber-400 hover:shadow-md transition"
+              >
+                <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                  <span>Stok Kritis / Menipis</span>
+                  <Boxes className="w-3.5 h-3.5 text-amber-500" />
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1">Perlu kulakan / intake baru</div>
+                <div className="text-2xl font-black text-amber-600 mt-1">
+                  {(stockOverview?.outOfStockCount || 0) + (stockOverview?.lowStockCount || 0)} sayuran
+                </div>
+                <div className="text-[11px] text-emerald-800 font-bold mt-1 flex items-center gap-1">
+                  <span>Kelola di Manajemen Stok</span> &rarr;
+                </div>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
@@ -618,7 +819,595 @@ export default function SellerDashboardPage() {
           </div>
         )}
 
-        {/* TAB 2: BARANG MASUK & KALKULATOR BIAYA */}
+        {/* TAB 2: MANAJEMEN STOK */}
+        {activeTab === "stock" && (
+          <div className="space-y-6">
+            {/* KPI Overview Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Total Stok Fisik di Kios */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                  <span>Stok Fisik di Kios</span>
+                  <Boxes className="w-4 h-4 text-emerald-700" />
+                </div>
+                <div className="text-2xl font-black text-emerald-900 mt-1">
+                  {stockOverview?.totalPhysicalQty ?? 0}{" "}
+                  <span className="text-xs font-bold text-slate-500">kg/ikat</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Modal Aset: <span className="font-semibold text-slate-700">Rp {(stockOverview?.totalStockValueIdr ?? 0).toLocaleString("id-ID")}</span>
+                </div>
+              </div>
+
+              {/* 2. Stok Tersedia Bersih */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                  <span>Tersedia Siap Jual</span>
+                  <CheckCircle className="w-4 h-4 text-lime-600" />
+                </div>
+                <div className="text-2xl font-black text-lime-700 mt-1">
+                  {stockOverview?.totalAvailableQty ?? 0}{" "}
+                  <span className="text-xs font-bold text-slate-500">kg/ikat</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Dicadangkan: <span className="font-semibold text-slate-700">{stockOverview?.totalReservedQty ?? 0}</span> di pesanan
+                </div>
+              </div>
+
+              {/* 3. Peringatan Stok Kritis & Habis */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                  <span>Stok Perlu Kulakan</span>
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-black text-amber-600 mt-1">
+                  {(stockOverview?.outOfStockCount ?? 0) + (stockOverview?.lowStockCount ?? 0)}{" "}
+                  <span className="text-xs font-bold text-slate-500">SKU</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  <span className="text-red-600 font-bold">{stockOverview?.outOfStockCount ?? 0} Habis</span> • {stockOverview?.lowStockCount ?? 0} Menipis
+                </div>
+              </div>
+
+              {/* 4. Total Susut & Sortasi (Waste) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                  <span>Total Susut / Waste</span>
+                  <TrendingDown className="w-4 h-4 text-red-500" />
+                </div>
+                <div className="text-2xl font-black text-red-600 mt-1">
+                  {stockOverview?.totalSpoilageQty ?? 0}{" "}
+                  <span className="text-xs font-bold text-slate-500">kg/ikat</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Sortasi awal & kelayuan fisik
+                </div>
+              </div>
+            </div>
+
+            {/* Database Persistence Engine Status Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-slate-900 text-sm">
+                        Database Penyimpanan Stok Terpusat (Crash-Safe Disk Storage)
+                      </h4>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        Anti-Hilang Aktif
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Setiap mutasi stok, batch panen, dan transaksi pesanan disimpan otomatis ke disk storage secara atomik. Data tidak akan hilang saat server restart.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href="/api/seller/database/backup"
+                    download
+                    className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 border border-emerald-200 transition"
+                    title="Download snapshot database utuh dalam format JSON"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Backup JSON</span>
+                  </a>
+
+                  <button
+                    onClick={handleResetDatabase}
+                    className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 text-xs font-semibold border border-slate-200 transition"
+                    title="Reset ke data awal seed (demo)"
+                  >
+                    Reset Demo
+                  </button>
+                </div>
+              </div>
+
+              {/* Database Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Status File Database</span>
+                  <span className="font-bold text-slate-800 text-xs truncate block font-mono">
+                    data/agripass-database.json
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-semibold">
+                    Ukuran: {dbInfo?.fileSizeKb ?? 34} KB
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Riwayat Audit Mutasi</span>
+                  <span className="font-bold text-slate-800 text-xs block">
+                    {dbInfo?.counts.stockMovements ?? stockMovements.length} transaksi mutasi
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Masuk, susut, sortir, jual
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Batch Panen Tersimpan</span>
+                  <span className="font-bold text-slate-800 text-xs block">
+                    {dbInfo?.counts.batches ?? batches.length} batch aktif
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Lengkap foto QC & modal
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Penyimpanan Terakhir</span>
+                  <span className="font-bold text-slate-800 text-xs block truncate">
+                    {dbInfo?.lastModified ? new Date(dbInfo.lastModified).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Real-time"}
+                  </span>
+                  <span className="text-[10px] text-lime-700 font-semibold">
+                    Auto-save tiap mutasi
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Smart Action Header */}
+            <div className="bg-gradient-to-r from-emerald-900 via-emerald-950 to-teal-950 rounded-2xl p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm border border-emerald-800/80">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-800 text-[11px] text-lime-300 font-bold mb-1.5">
+                  <Sparkles className="w-3 h-3" /> Asisten Pintar Kios Sayur
+                </div>
+                <h3 className="font-black text-lg">Pusat Kontrol & Rotasi Stok Sayuran</h3>
+                <p className="text-xs text-emerald-200/80 mt-0.5 max-w-xl">
+                  Pantau stok fisik real-time, audit rotasi FIFO untuk mencegah kelayuan daun, dan catat susut timbangan harian dalam 1 kali klik.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  onClick={() => openAdjustModal()}
+                  className="px-4 py-2.5 rounded-xl bg-white text-emerald-950 hover:bg-slate-100 text-xs font-black flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <Scale className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>+ Penyesuaian / Catat Susut</span>
+                </button>
+
+                <button
+                  onClick={handleTriggerAiRestock}
+                  className="px-4 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-emerald-950 text-xs font-black flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-900" />
+                  <span>AI Rekomendasi Restock</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-Tabs: Inventori vs Mutasi */}
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+              <button
+                onClick={() => setStockSubTab("inventory")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  stockSubTab === "inventory"
+                    ? "bg-emerald-800 text-white shadow-xs"
+                    : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5" />
+                <span>Daftar Inventori Sayur ({inventoryItems.length})</span>
+              </button>
+
+              <button
+                onClick={() => setStockSubTab("movements")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  stockSubTab === "movements"
+                    ? "bg-emerald-800 text-white shadow-xs"
+                    : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Kartu Stok & Audit Mutasi ({stockMovements.length})</span>
+              </button>
+            </div>
+
+            {/* SUB-TAB 1: DAFTAR INVENTORI SAYUR */}
+            {stockSubTab === "inventory" && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-5 space-y-4">
+                {/* Search & Filters */}
+                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={stockSearch}
+                      onChange={(e) => setStockSearch(e.target.value)}
+                      placeholder="Cari sayuran, cabai, bumbu..."
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-slate-50 focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={stockCategoryFilter}
+                      onChange={(e) => setStockCategoryFilter(e.target.value)}
+                      className="px-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
+                    >
+                      <option value="ALL">Semua Kategori</option>
+                      <option value="Sayuran Daun">Sayuran Daun</option>
+                      <option value="Buah & Tomat">Buah & Tomat</option>
+                      <option value="Cabai">Cabai</option>
+                      <option value="Bumbu & Umbi">Bumbu & Umbi</option>
+                      <option value="Polong">Polong</option>
+                    </select>
+
+                    <select
+                      value={stockStatusFilter}
+                      onChange={(e) => setStockStatusFilter(e.target.value)}
+                      className="px-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
+                    >
+                      <option value="ALL">Semua Status</option>
+                      <option value="SAFE">Stok Aman (&gt;10)</option>
+                      <option value="LOW">Stok Menipis (≤10)</option>
+                      <option value="OUT">Stok Habis (0)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-semibold">
+                        <th className="pb-3 pl-2">Komoditas / Sayur</th>
+                        <th className="pb-3 text-right">Stok Fisik</th>
+                        <th className="pb-3 text-right">Dicadangkan</th>
+                        <th className="pb-3 text-right">Tersedia</th>
+                        <th className="pb-3 text-center">Status</th>
+                        <th className="pb-3">Batch & FIFO</th>
+                        <th className="pb-3 text-right">Nilai Modal</th>
+                        <th className="pb-3 pr-2 text-right">Aksi Cepat</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {inventoryItems
+                        .filter((item) => {
+                          if (stockSearch) {
+                            const q = stockSearch.toLowerCase();
+                            const matchName = item.name.toLowerCase().includes(q);
+                            const matchAlias = item.aliases?.toLowerCase().includes(q);
+                            const matchCat = item.category?.toLowerCase().includes(q);
+                            if (!matchName && !matchAlias && !matchCat) return false;
+                          }
+                          if (stockCategoryFilter !== "ALL" && !item.category.includes(stockCategoryFilter)) {
+                            return false;
+                          }
+                          if (stockStatusFilter !== "ALL" && item.status !== stockStatusFilter) {
+                            return false;
+                          }
+                          return true;
+                        })
+                        .map((item) => {
+                          const isExpanded = expandedBatchProductId === item.id;
+                          const isAgingLeaf =
+                            item.category.toLowerCase().includes("daun") &&
+                            item.oldestBatchAgeHours !== null &&
+                            item.oldestBatchAgeHours >= 12;
+
+                          return (
+                            <React.Fragment key={item.id}>
+                              <tr className="hover:bg-slate-50/80 transition">
+                                <td className="py-3 pl-2">
+                                  <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                                    <span>{item.name}</span>
+                                    {isAgingLeaf && (
+                                      <span
+                                        title="Sayuran daun sudah disimpan lebih dari 12 jam, pantau kesegarannya"
+                                        className="text-amber-500 cursor-help"
+                                      >
+                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                                    <span>{item.category}</span>
+                                    <span>•</span>
+                                    <span>Rp {item.priceIdr.toLocaleString("id-ID")}/{item.saleUnit}</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-3 text-right">
+                                  <span className="font-black text-slate-900 text-sm">
+                                    {item.physicalQty}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 ml-1">{item.saleUnit}</span>
+                                </td>
+
+                                <td className="py-3 text-right">
+                                  {item.reservedQty > 0 ? (
+                                    <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">
+                                      {item.reservedQty} {item.saleUnit}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
+
+                                <td className="py-3 text-right">
+                                  <span
+                                    className={`font-black text-sm ${
+                                      item.availableQty === 0
+                                        ? "text-red-600"
+                                        : item.availableQty <= 10
+                                        ? "text-amber-600"
+                                        : "text-emerald-800"
+                                    }`}
+                                  >
+                                    {item.availableQty}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 ml-1">{item.saleUnit}</span>
+                                </td>
+
+                                <td className="py-3 text-center">
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      item.status === "SAFE"
+                                        ? "bg-emerald-100 text-emerald-900"
+                                        : item.status === "LOW"
+                                        ? "bg-amber-100 text-amber-900"
+                                        : "bg-red-100 text-red-900"
+                                    }`}
+                                  >
+                                    {item.status === "SAFE" ? "Aman" : item.status === "LOW" ? "Menipis" : "Habis"}
+                                  </span>
+                                </td>
+
+                                <td className="py-3">
+                                  <div className="text-slate-700 font-medium">
+                                    {item.activeBatchCount > 0 ? (
+                                      <span>
+                                        {item.activeBatchCount} batch •{" "}
+                                        <span className={isAgingLeaf ? "text-amber-600 font-bold" : "text-slate-500"}>
+                                          {item.oldestBatchAgeHours ?? 0}j di kios
+                                        </span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 italic">Tidak ada batch</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="py-3 text-right text-slate-700 font-semibold">
+                                  Rp {item.stockValueIdr.toLocaleString("id-ID")}
+                                </td>
+
+                                <td className="py-3 pr-2 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => openAdjustModal(item)}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 transition"
+                                      title="Koreksi stok atau catat susut"
+                                    >
+                                      ± Susut/Opname
+                                    </button>
+
+                                    {item.batches.length > 0 && (
+                                      <button
+                                        onClick={() =>
+                                          setExpandedBatchProductId(isExpanded ? null : item.id)
+                                        }
+                                        className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition"
+                                        title="Lihat rincian batch & paspor"
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Accordion Batch Details */}
+                              {isExpanded && (
+                                <tr className="bg-slate-50/70 border-b border-slate-200">
+                                  <td colSpan={8} className="p-3 pl-6 pr-4">
+                                    <div className="space-y-2">
+                                      <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                                        <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                                        <span>Rincian Batch Aktif untuk {item.name}:</span>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {item.batches.map((b) => (
+                                          <div
+                                            key={b.id}
+                                            className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                                          >
+                                            <div className="space-y-0.5">
+                                              <div className="flex items-center gap-2">
+                                                <span className="font-mono text-[11px] font-bold text-emerald-950">
+                                                  {b.publicId}
+                                                </span>
+                                                {b.freshnessGrade && (
+                                                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold">
+                                                    Grade: {b.freshnessGrade} ({b.freshnessScore}%)
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="text-[11px] text-slate-500">
+                                                Asal: {b.origin || "Kebun Mitra"} • Masuk: {new Date(b.receivedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
+                                              </div>
+                                              <div className="text-[10px] text-slate-400">
+                                                Modal: Rp {b.unitCost.toLocaleString("id-ID")}/{item.saleUnit}
+                                              </div>
+                                            </div>
+
+                                            <div className="text-right flex flex-col items-end gap-1">
+                                              <div className="font-bold text-emerald-800">
+                                                {b.salableQty} {item.saleUnit}
+                                              </div>
+                                              {b.inspectionPhoto && (
+                                                <button
+                                                  onClick={() => setSelectedPhotoModal(b.inspectionPhoto || null)}
+                                                  className="text-[10px] text-emerald-700 hover:underline flex items-center gap-1"
+                                                >
+                                                  <Camera className="w-3 h-3" /> Foto AI
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 2: KARTU STOK & AUDIT MUTASI */}
+            {stockSubTab === "movements" && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-black text-slate-900 text-sm">Audit Trail Pergerakan Stok (Kartu Stok)</h4>
+                    <p className="text-xs text-slate-500">
+                      Seluruh mutasi keluar-masuk barang, susut sortir, dan penjualan tercatat secara transparan.
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-400">
+                    {stockMovements.length} mutasi tercatat
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-semibold">
+                        <th className="pb-3 pl-2">Waktu</th>
+                        <th className="pb-3">Komoditas & Batch</th>
+                        <th className="pb-3">Tipe Mutasi</th>
+                        <th className="pb-3 text-right">Perubahan Qty</th>
+                        <th className="pb-3 pl-4">Alasan / Catatan</th>
+                        <th className="pb-3 text-right pr-2">Aktor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {stockMovements.map((mov) => {
+                        const isPositive = mov.quantity > 0;
+                        return (
+                          <tr key={mov.id} className="hover:bg-slate-50 transition">
+                            <td className="py-3 pl-2 text-slate-500 whitespace-nowrap">
+                              {new Date(mov.createdAt).toLocaleDateString("id-ID", {
+                                day: "numeric",
+                                month: "short",
+                              })}
+                              ,{" "}
+                              {new Date(mov.createdAt).toLocaleTimeString("id-ID", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+
+                            <td className="py-3">
+                              <div className="font-bold text-slate-900">{mov.productName}</div>
+                              <div className="text-[10px] font-mono text-slate-400">{mov.batchPublicId}</div>
+                            </td>
+
+                            <td className="py-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  mov.type === "INTAKE"
+                                    ? "bg-emerald-100 text-emerald-900"
+                                    : mov.type === "SPOILAGE_INITIAL"
+                                    ? "bg-amber-100 text-amber-900"
+                                    : mov.type === "SPOILAGE_POST"
+                                    ? "bg-red-100 text-red-900"
+                                    : mov.type === "SALE"
+                                    ? "bg-blue-100 text-blue-900"
+                                    : mov.type === "RETURN"
+                                    ? "bg-purple-100 text-purple-900"
+                                    : "bg-slate-100 text-slate-800"
+                                }`}
+                              >
+                                {mov.type === "INTAKE"
+                                  ? "+ Penerimaan"
+                                  : mov.type === "SPOILAGE_INITIAL"
+                                  ? "- Susut Awal"
+                                  : mov.type === "SPOILAGE_POST"
+                                  ? "- Susut Layu (Waste)"
+                                  : mov.type === "SALE"
+                                  ? "- Penjualan"
+                                  : mov.type === "RETURN"
+                                  ? "- Retur"
+                                  : "± Koreksi Opname"}
+                              </span>
+                            </td>
+
+                            <td className="py-3 text-right">
+                              <span
+                                className={`font-black text-sm ${
+                                  isPositive ? "text-emerald-700" : "text-red-600"
+                                }`}
+                              >
+                                {isPositive ? `+${mov.quantity}` : mov.quantity}
+                              </span>
+                              <span className="text-[10px] text-slate-400 ml-1">{mov.saleUnit}</span>
+                            </td>
+
+                            <td className="py-3 pl-4 text-slate-600 max-w-xs">
+                              {mov.reason}
+                              {mov.orderId && (
+                                <span className="text-[10px] text-blue-600 font-mono ml-1.5">
+                                  ({mov.orderId})
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 text-right pr-2 text-slate-400 font-mono text-[10px]">
+                              {mov.actorId || "sistem"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: BARANG MASUK & KALKULATOR BIAYA */}
         {activeTab === "intake" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Form Intake (1 col) */}
@@ -1208,6 +1997,418 @@ export default function SellerDashboardPage() {
             >
               Tutup
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stock Adjustment & Spoilage Modal */}
+      {isAdjustModalOpen && selectedAdjustProduct && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-emerald-800" />
+                  <span>Penyesuaian Stok & Catat Susut</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Catat sayuran layu, selisih timbangan display, atau opname fisik.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAdjustModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdjustStockSubmit} className="space-y-4 text-xs">
+              {/* Product Selection */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Komoditas / Sayur:
+                </label>
+                <select
+                  value={selectedAdjustProduct.id}
+                  onChange={(e) => {
+                    const item = inventoryItems.find((i) => i.id === e.target.value);
+                    if (item) {
+                      setSelectedAdjustProduct(item);
+                      setAdjustBatchId("");
+                    }
+                  }}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none focus:border-emerald-600"
+                >
+                  {inventoryItems.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name} (Stok Fisik: {i.physicalQty} {i.saleUnit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Batch Selection (Optional) */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Batch Target:
+                </label>
+                <select
+                  value={adjustBatchId}
+                  onChange={(e) => setAdjustBatchId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none focus:border-emerald-600 text-slate-600"
+                >
+                  <option value="">Otomatis Batch Tertua (Rotasi FIFO)</option>
+                  {selectedAdjustProduct.batches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.publicId} ({b.salableQty} {selectedAdjustProduct.saleUnit} • {b.origin || "Kebun Mitra"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Adjustment Type Cards */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5">
+                  Jenis Penyesuaian:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdjustType("SPOILAGE_POST");
+                      setAdjustReason("Daun layu / sortasi sore hari");
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
+                      adjustType === "SPOILAGE_POST"
+                        ? "border-red-500 bg-red-50/70 text-red-950 font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-base">🍂</span>
+                    <div>
+                      <div className="font-bold">Susut Layu (Waste)</div>
+                      <div className="text-[10px] text-slate-500">Mengurangi stok toko</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdjustType("CORRECTION");
+                      setAdjustReason("Selisih hitung opname fisik");
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
+                      adjustType === "CORRECTION"
+                        ? "border-blue-500 bg-blue-50/70 text-blue-950 font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-base">⚖️</span>
+                    <div>
+                      <div className="font-bold">Koreksi Opname</div>
+                      <div className="text-[10px] text-slate-500">Selisih timbang / stok fisik</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdjustType("INTAKE");
+                      setAdjustReason("Bonus pasokan dari petani/pemasok");
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
+                      adjustType === "INTAKE"
+                        ? "border-emerald-500 bg-emerald-50/70 text-emerald-950 font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-base">📦</span>
+                    <div>
+                      <div className="font-bold">Tambah Manual</div>
+                      <div className="text-[10px] text-slate-500">Menambah stok fisik</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdjustType("RETURN");
+                      setAdjustReason("Retur barang rusak ke pemasok");
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
+                      adjustType === "RETURN"
+                        ? "border-purple-500 bg-purple-50/70 text-purple-950 font-bold"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-base">↩️</span>
+                    <div>
+                      <div className="font-bold">Retur ke Pemasok</div>
+                      <div className="text-[10px] text-slate-500">Kembalikan ke tengkulak</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quantity Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-700 font-bold">
+                    Jumlah {adjustType === "SPOILAGE_POST" || adjustType === "RETURN" ? "yang Dikurangi" : "Penyesuaian"}:
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    Stok saat ini: <strong className="text-slate-900">{selectedAdjustProduct.physicalQty} {selectedAdjustProduct.saleUnit}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    value={adjustQuantity}
+                    onChange={(e) => setAdjustQuantity(parseFloat(e.target.value) || 0)}
+                    className="flex-1 p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-sm focus:outline-none focus:border-emerald-600"
+                    required
+                  />
+                  <span className="px-3 py-2.5 bg-slate-100 rounded-xl font-bold text-slate-700">
+                    {selectedAdjustProduct.saleUnit}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Preset Reason Chips */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Pilihan Alasan Cepat:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Daun layu / sortasi sore",
+                    "Daun menguning",
+                    "Selisih timbang display",
+                    "Busuk / cacat fisik",
+                    "Bonus dari petani",
+                    "Sortasi ulang kebersihan",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setAdjustReason(preset)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition border ${
+                        adjustReason === preset
+                          ? "bg-emerald-800 text-white border-emerald-800"
+                          : "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200"
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason Input */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Keterangan / Alasan Lengkap:
+                </label>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  placeholder="Contoh: Daun luar menguning terbuang saat display sore"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-emerald-600"
+                  required
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="pt-3 border-t flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAdjustModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition text-center"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAdjust}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold transition shadow-md disabled:opacity-50 text-center"
+                >
+                  {submittingAdjust ? "Menyimpan..." : "Simpan Penyesuaian"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* AI Smart Restock & Freshness Modal */}
+      {isAiRestockOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-lime-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">
+                    Asisten AI: Rekomendasi Restock & Umur Simpan
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Analisis data inventori cerdas untuk persiapan belanja pasar induk subuh besok.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAiRestockOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingAiRestock ? (
+              <div className="py-16 text-center space-y-3">
+                <div className="inline-block animate-spin text-emerald-800">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <div className="text-xs font-bold text-slate-700">
+                  Gemini AI sedang menganalisis 18 SKU sayur, stok kritis, dan usia batch...
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Menyusun daftar belanja pasar subuh optimal dan saran mitigasi kelayuan.
+                </div>
+              </div>
+            ) : aiRestockData ? (
+              <div className="space-y-4 text-xs">
+                {/* AI Executive Summary Card */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-900 to-teal-950 text-white space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-lime-300 font-bold text-[11px]">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Ringkasan Eksekutif Analisis Kios</span>
+                  </div>
+                  <p className="text-xs text-emerald-100 leading-relaxed">
+                    {aiRestockData.summary}
+                  </p>
+                </div>
+
+                {/* Urgent Restock List */}
+                <div className="space-y-2">
+                  <h4 className="font-black text-slate-900 text-xs flex items-center justify-between">
+                    <span>Daftar Prioritas Belanja Pasar Subuh</span>
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      {aiRestockData.urgentRestock.length} komoditas dianjurkan
+                    </span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {aiRestockData.urgentRestock.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 text-xs">{item.productName}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              item.urgency === "KRITIS"
+                                ? "bg-red-100 text-red-900"
+                                : "bg-amber-100 text-amber-900"
+                            }`}
+                          >
+                            {item.urgency}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          Sisa saat ini: <strong>{item.currentStock} {item.saleUnit}</strong> &rarr; Rekomendasi Restock:{" "}
+                          <strong className="text-emerald-800 text-xs">+{item.recommendedRestockQty} {item.saleUnit}</strong>
+                        </div>
+                        <div className="text-[10px] text-slate-400 italic">{item.reason}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Freshness Risk Items */}
+                {aiRestockData.freshnessRiskItems && aiRestockData.freshnessRiskItems.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Sayuran Rentan Layu (Perlu Tindakan Sore Ini)</span>
+                    </h4>
+
+                    <div className="space-y-1.5">
+                      {aiRestockData.freshnessRiskItems.map((risk, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-950 flex items-start justify-between gap-2"
+                        >
+                          <div>
+                            <span className="font-bold">{risk.productName}</span>: {risk.action}
+                          </div>
+                          <span className="text-[10px] bg-amber-200 px-2 py-0.5 rounded-md font-bold whitespace-nowrap">
+                            {risk.batchAgeHours}j di kios
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* WhatsApp Ready Shopping List Textbox */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Format Daftar Belanja (Siap Kirim ke WhatsApp)</span>
+                    </h4>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyShoppingList}
+                      className="px-3 py-1 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition shadow-xs"
+                    >
+                      {copiedShoppingList ? (
+                        <>
+                          <Check className="w-3 h-3 text-lime-400" />
+                          <span>Tersalin!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Salin Format WA</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-slate-900 text-emerald-200 rounded-xl font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto border border-slate-800">
+                    {aiRestockData.marketShoppingListText}
+                  </div>
+                </div>
+
+                {/* General Advice */}
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-700 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-bold">Tips Mitigasi Susut Kios Esok Hari:</div>
+                    <div className="text-slate-600 mt-0.5">{aiRestockData.generalAdvice}</div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => setIsAiRestockOpen(false)}
+                    className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition text-center"
+                  >
+                    Tutup Asisten
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

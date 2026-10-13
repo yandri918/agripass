@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import {
   initialBatches,
   initialClaims,
@@ -7,6 +9,7 @@ import {
 } from "./seed-data";
 import {
   Batch,
+  InventoryItem,
   MovementType,
   Order,
   OrderItem,
@@ -15,7 +18,10 @@ import {
   ProductClaim,
   Reservation,
   Shop,
+  StockAdjustmentInput,
   StockMovement,
+  StockMovementWithDetails,
+  StockOverview,
   Supplier,
 } from "./types";
 
@@ -30,22 +36,97 @@ interface DbState {
   stockMovements: StockMovement[];
 }
 
-// Global in-memory singleton state
+// Generate initial stock movements from initial batches
+const initialMovements: StockMovement[] = [];
+initialBatches.forEach((b, idx) => {
+  initialMovements.push({
+    id: `mov-init-${idx + 1}-in`,
+    batchId: b.id,
+    type: "INTAKE",
+    quantity: b.receivedQty,
+    reason: `Penerimaan awal pasokan (${b.origin || "Pemasok"})`,
+    actorId: "seller",
+    createdAt: b.receivedAt,
+  });
+  if (b.initialDamageQty > 0) {
+    initialMovements.push({
+      id: `mov-init-${idx + 1}-spoil`,
+      batchId: b.id,
+      type: "SPOILAGE_INITIAL",
+      quantity: -b.initialDamageQty,
+      reason: "Sortasi awal buah/daun layu saat terima",
+      actorId: "seller",
+      createdAt: b.receivedAt,
+    });
+  }
+});
+
+// Database Persistence Configuration
+const DB_FILE_PATH =
+  process.env.DATABASE_STORAGE_PATH ||
+  path.join(process.cwd(), "data", "agripass-database.json");
+
+function loadDbFromDisk(): DbState | null {
+  try {
+    if (typeof process !== "undefined" && fs.existsSync(/*turbopackIgnore: true*/ DB_FILE_PATH)) {
+      const raw = fs.readFileSync(/*turbopackIgnore: true*/ DB_FILE_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        Array.isArray(parsed.products) &&
+        Array.isArray(parsed.batches) &&
+        Array.isArray(parsed.stockMovements)
+      ) {
+        return parsed as DbState;
+      }
+    }
+  } catch (err) {
+    console.error("Gagal membaca database AgriPass dari disk:", err);
+  }
+  return null;
+}
+
+function persistDbToDisk(state?: DbState): void {
+  try {
+    const targetState = state || globalStore.__agripassDb;
+    if (!targetState) return;
+    const dir = path.dirname(DB_FILE_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const tempFile = `${DB_FILE_PATH}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(targetState, null, 2), "utf-8");
+    fs.renameSync(tempFile, DB_FILE_PATH);
+  } catch (err) {
+    console.error("Gagal menyimpan database AgriPass ke disk:", err);
+  }
+}
+
+// Global in-memory singleton state with Disk Sync
 const globalStore = globalThis as unknown as {
   __agripassDb?: DbState;
 };
 
 if (!globalStore.__agripassDb) {
-  globalStore.__agripassDb = {
-    shop: { ...initialShop },
-    suppliers: [...initialSuppliers],
-    products: [...initialProducts],
-    batches: [...initialBatches],
-    claims: [...initialClaims],
-    orders: [],
-    reservations: [],
-    stockMovements: [],
-  };
+  const fromDisk = loadDbFromDisk();
+  if (fromDisk) {
+    globalStore.__agripassDb = fromDisk;
+  } else {
+    globalStore.__agripassDb = {
+      shop: { ...initialShop },
+      suppliers: [...initialSuppliers],
+      products: [...initialProducts],
+      batches: [...initialBatches],
+      claims: [...initialClaims],
+      orders: [],
+      reservations: [],
+      stockMovements: [...initialMovements],
+    };
+    persistDbToDisk(globalStore.__agripassDb);
+  }
+} else if (!globalStore.__agripassDb.stockMovements || globalStore.__agripassDb.stockMovements.length === 0) {
+  globalStore.__agripassDb.stockMovements = [...initialMovements];
+  persistDbToDisk(globalStore.__agripassDb);
 }
 
 const db = globalStore.__agripassDb;
@@ -58,6 +139,7 @@ export const dataStore = {
 
   updateShop(updates: Partial<Shop>): Shop {
     db.shop = { ...db.shop, ...updates, updatedAt: new Date().toISOString() };
+    persistDbToDisk(db);
     return db.shop;
   },
 
@@ -113,6 +195,7 @@ export const dataStore = {
     prod.priceIdr = newPriceIdr;
     if (published !== undefined) prod.published = published;
     prod.updatedAt = new Date().toISOString();
+    persistDbToDisk(db);
     return prod;
   },
 
@@ -225,6 +308,7 @@ export const dataStore = {
       });
     }
 
+    persistDbToDisk(db);
     return newBatch;
   },
 
@@ -246,6 +330,7 @@ export const dataStore = {
       createdAt: new Date().toISOString(),
     };
     db.stockMovements.push(mov);
+    persistDbToDisk(db);
     return mov;
   },
 
@@ -317,6 +402,7 @@ export const dataStore = {
     };
 
     db.orders.unshift(newOrder);
+    persistDbToDisk(db);
     return newOrder;
   },
 
@@ -366,6 +452,7 @@ export const dataStore = {
     order.status = "ACCEPTED";
     order.version += 1;
     order.updatedAt = new Date().toISOString();
+    persistDbToDisk(db);
     return order;
   },
 
@@ -398,6 +485,7 @@ export const dataStore = {
     order.status = hasMaterialChange ? "AWAITING_CONFIRMATION" : "PREPARING";
     order.version += 1;
     order.updatedAt = new Date().toISOString();
+    persistDbToDisk(db);
     return order;
   },
 
@@ -426,6 +514,7 @@ export const dataStore = {
     order.status = "COMPLETED";
     order.version += 1;
     order.updatedAt = new Date().toISOString();
+    persistDbToDisk(db);
     return order;
   },
 
@@ -449,6 +538,305 @@ export const dataStore = {
     order.notes = reason ? `${order.notes || ""} [Batal: ${reason}]` : order.notes;
     order.version += 1;
     order.updatedAt = new Date().toISOString();
+    persistDbToDisk(db);
     return order;
+  },
+
+  // --- MANAJEMEN STOK & INVENTORI PENJUAL ---
+  getStockOverview(): StockOverview {
+    const products = db.products;
+    const activeBatches = db.batches.filter((b) => b.status === "ACTIVE");
+
+    let totalPhysicalQty = 0;
+    let totalStockValueIdr = 0;
+    for (const b of activeBatches) {
+      totalPhysicalQty += b.salableQty;
+      totalStockValueIdr += b.salableQty * (b.unitCost || 0);
+    }
+
+    const activeReservations = db.reservations.filter((r) => r.status === "ACTIVE");
+    const totalReservedQty = activeReservations.reduce((sum, r) => sum + r.quantity, 0);
+    const totalAvailableQty = Math.max(0, totalPhysicalQty - totalReservedQty);
+
+    const spoilageMovements = db.stockMovements.filter(
+      (m) => m.type === "SPOILAGE_INITIAL" || m.type === "SPOILAGE_POST"
+    );
+    const totalSpoilageQty = Math.abs(
+      spoilageMovements.reduce((sum, m) => sum + m.quantity, 0)
+    );
+
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    for (const p of products) {
+      const productBatches = activeBatches.filter((b) => b.productId === p.id);
+      const prodPhysical = productBatches.reduce((sum, b) => sum + b.salableQty, 0);
+      if (prodPhysical === 0) {
+        outOfStockCount++;
+      } else if (prodPhysical <= 10) {
+        lowStockCount++;
+      }
+    }
+
+    return {
+      totalProducts: products.length,
+      totalActiveBatches: activeBatches.length,
+      totalPhysicalQty: Math.round(totalPhysicalQty * 10) / 10,
+      totalReservedQty: Math.round(totalReservedQty * 10) / 10,
+      totalAvailableQty: Math.round(totalAvailableQty * 10) / 10,
+      totalStockValueIdr: Math.round(totalStockValueIdr),
+      lowStockCount,
+      outOfStockCount,
+      totalSpoilageQty: Math.round(totalSpoilageQty * 10) / 10,
+    };
+  },
+
+  getInventoryItems(): InventoryItem[] {
+    const now = Date.now();
+    return db.products.map((p) => {
+      const productBatches = db.batches
+        .filter((b) => b.productId === p.id && b.status === "ACTIVE")
+        .map((b) => {
+          const sup = db.suppliers.find((s) => s.id === b.supplierId);
+          return {
+            id: b.id,
+            publicId: b.publicId,
+            salableQty: b.salableQty,
+            unitCost: b.unitCost,
+            receivedAt: b.receivedAt,
+            origin: b.origin,
+            supplierName: sup ? sup.name : null,
+            freshnessGrade: b.freshnessGrade,
+            freshnessScore: b.freshnessScore,
+            inspectionPhoto: b.inspectionPhoto,
+          };
+        });
+
+      const physicalQty =
+        Math.round(productBatches.reduce((acc, b) => acc + b.salableQty, 0) * 10) / 10;
+
+      const productReservations = db.reservations.filter((r) => {
+        if (r.status !== "ACTIVE") return false;
+        const batch = db.batches.find((b) => b.id === r.batchId);
+        return batch && batch.productId === p.id;
+      });
+      const reservedQty =
+        Math.round(productReservations.reduce((acc, r) => acc + r.quantity, 0) * 10) / 10;
+
+      const availableQty = Math.max(0, Math.round((physicalQty - reservedQty) * 10) / 10);
+
+      let status: "SAFE" | "LOW" | "OUT" = "SAFE";
+      if (physicalQty === 0) status = "OUT";
+      else if (physicalQty <= 10) status = "LOW";
+
+      let oldestBatchDate: string | null = null;
+      let oldestBatchAgeHours: number | null = null;
+      if (productBatches.length > 0) {
+        const sorted = [...productBatches].sort(
+          (a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+        );
+        oldestBatchDate = sorted[0].receivedAt;
+        oldestBatchAgeHours = Math.round(
+          (now - new Date(sorted[0].receivedAt).getTime()) / (1000 * 60 * 60)
+        );
+      }
+
+      const stockValueIdr = Math.round(
+        productBatches.reduce((sum, b) => sum + b.salableQty * b.unitCost, 0)
+      );
+
+      return {
+        id: p.id,
+        publicId: p.publicId,
+        name: p.name,
+        aliases: p.aliases,
+        category: p.category,
+        saleUnit: p.saleUnit,
+        priceIdr: p.priceIdr,
+        published: p.published,
+        physicalQty,
+        reservedQty,
+        availableQty,
+        activeBatchCount: productBatches.length,
+        status,
+        oldestBatchDate,
+        oldestBatchAgeHours,
+        stockValueIdr,
+        batches: productBatches,
+      };
+    });
+  },
+
+  getStockMovements(productId?: string, limit = 50): StockMovementWithDetails[] {
+    let list = db.stockMovements;
+    if (productId) {
+      const batchIds = db.batches.filter((b) => b.productId === productId).map((b) => b.id);
+      list = list.filter((m) => batchIds.includes(m.batchId));
+    }
+
+    return list
+      .slice()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit)
+      .map((m) => {
+        const batch = db.batches.find((b) => b.id === m.batchId);
+        const product = batch ? db.products.find((p) => p.id === batch.productId) : null;
+        return {
+          id: m.id,
+          batchId: m.batchId,
+          batchPublicId: batch?.publicId || "batch-unknown",
+          productId: product?.id || "",
+          productName: product?.name || "Produk",
+          saleUnit: product?.saleUnit || "kg",
+          type: m.type,
+          quantity: m.quantity,
+          reason: m.reason,
+          orderId: m.orderId,
+          actorId: m.actorId,
+          createdAt: m.createdAt,
+        };
+      });
+  },
+
+  adjustStock(input: StockAdjustmentInput) {
+    let batch: Batch | undefined;
+
+    const targetProduct = input.productId
+      ? db.products.find((p) => p.id === input.productId || p.publicId === input.productId)
+      : null;
+    const resolvedProductId = targetProduct ? targetProduct.id : input.productId;
+
+    if (input.batchId) {
+      batch = db.batches.find((b) => b.id === input.batchId);
+    } else if (resolvedProductId) {
+      const activeBatches = db.batches.filter(
+        (b) => b.productId === resolvedProductId && b.status === "ACTIVE"
+      );
+      if (input.quantity < 0 || input.type === "SPOILAGE_POST" || input.type === "RETURN") {
+        // FIFO: kurangi batch yang lebih tua terlebih dahulu
+        batch = activeBatches.sort(
+          (a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+        )[0];
+      } else {
+        batch = activeBatches[0] || db.batches.find((b) => b.productId === resolvedProductId);
+      }
+    }
+
+    if (!batch) {
+      throw new Error("Batch produk tidak ditemukan untuk penyesuaian stok");
+    }
+
+    const product = db.products.find((p) => p.id === batch!.productId);
+    if (!product) throw new Error("Produk tidak valid");
+
+    // Tentukan delta
+    let delta = input.quantity;
+    if (input.type === "SPOILAGE_POST" || input.type === "RETURN") {
+      delta = -Math.abs(input.quantity);
+    }
+
+    const previousQty = batch.salableQty;
+    const newSalableQty = Math.max(0, Math.round((previousQty + delta) * 100) / 100);
+    batch.salableQty = newSalableQty;
+    batch.status = newSalableQty === 0 ? "DEPLETED" : "ACTIVE";
+    batch.updatedAt = new Date().toISOString();
+
+    const movement = this.recordStockMovement(
+      batch.id,
+      input.type,
+      delta,
+      input.reason || `Penyesuaian stok ${input.type}`,
+      undefined
+    );
+
+    persistDbToDisk(db);
+
+    return {
+      batch,
+      product,
+      previousQty,
+      newSalableQty,
+      delta,
+      movement,
+    };
+  },
+
+  // --- DATABASE PERSISTENCE & BACKUP UTILITIES ---
+  getDatabaseInfo() {
+    let fileSizeKb = 0;
+    let lastModified: string | null = null;
+    let exists = false;
+    try {
+      if (fs.existsSync(/*turbopackIgnore: true*/ DB_FILE_PATH)) {
+        exists = true;
+        const stats = fs.statSync(/*turbopackIgnore: true*/ DB_FILE_PATH);
+        fileSizeKb = Math.round((stats.size / 1024) * 10) / 10;
+        lastModified = stats.mtime.toISOString();
+      }
+    } catch (e) {}
+
+    return {
+      persisted: true,
+      storageEngine: "PERSISTENT_FILE_JSON",
+      filePath: DB_FILE_PATH,
+      fileExists: exists,
+      fileSizeKb,
+      lastModified,
+      counts: {
+        products: db.products.length,
+        batches: db.batches.length,
+        activeBatches: db.batches.filter((b) => b.status === "ACTIVE").length,
+        stockMovements: db.stockMovements.length,
+        orders: db.orders.length,
+        suppliers: db.suppliers.length,
+      },
+    };
+  },
+
+  exportDatabaseBackup() {
+    return {
+      appName: "AgriPass AI",
+      backupVersion: 1,
+      exportedAt: new Date().toISOString(),
+      shop: db.shop,
+      suppliers: db.suppliers,
+      products: db.products,
+      batches: db.batches,
+      claims: db.claims,
+      orders: db.orders,
+      reservations: db.reservations,
+      stockMovements: db.stockMovements,
+    };
+  },
+
+  restoreDatabaseBackup(backup: any) {
+    if (!backup || !Array.isArray(backup.products) || !Array.isArray(backup.batches)) {
+      throw new Error("Format file backup tidak valid. Harus mengandung data produk dan batch.");
+    }
+
+    db.shop = backup.shop || { ...initialShop };
+    db.suppliers = Array.isArray(backup.suppliers) ? backup.suppliers : [...initialSuppliers];
+    db.products = backup.products;
+    db.batches = backup.batches;
+    db.claims = Array.isArray(backup.claims) ? backup.claims : [];
+    db.orders = Array.isArray(backup.orders) ? backup.orders : [];
+    db.reservations = Array.isArray(backup.reservations) ? backup.reservations : [];
+    db.stockMovements = Array.isArray(backup.stockMovements) ? backup.stockMovements : [];
+
+    persistDbToDisk(db);
+    return this.getDatabaseInfo();
+  },
+
+  resetDatabaseToSeed() {
+    db.shop = { ...initialShop };
+    db.suppliers = [...initialSuppliers];
+    db.products = [...initialProducts];
+    db.batches = [...initialBatches];
+    db.claims = [...initialClaims];
+    db.orders = [];
+    db.reservations = [];
+    db.stockMovements = [...initialMovements];
+
+    persistDbToDisk(db);
+    return this.getDatabaseInfo();
   },
 };

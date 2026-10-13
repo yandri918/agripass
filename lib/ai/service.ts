@@ -1,9 +1,12 @@
 import { dataStore } from "@/lib/data/store";
+import { InventoryItem, StockOverview } from "@/lib/data/types";
 import {
   OrderDraftResponse,
   OrderDraftResponseSchema,
   ProductQaResponse,
   ProductQaResponseSchema,
+  RestockRecommendation,
+  RestockRecommendationSchema,
   VisualInspectionResponse,
   VisualInspectionResponseSchema,
 } from "./types";
@@ -581,6 +584,153 @@ Kembalikan HANYA format JSON valid tanpa markdown formatting:
       "Lakukan sortasi ringan pada daun tepi, kemudian semprotkan air kabut tipis untuk menjaga kelembapan.",
     suggestedQualityClaim:
       "Sortasi visual AI: Kualitas prima, daun segar turgor tinggi bebas layu.",
+  };
+}
+
+/**
+ * AI Restock & Freshness Recommender
+ * Menganalisis kondisi stok saat ini, stok habis/menipis, dan risiko kelayuan batch tua.
+ * Menghasilkan daftar belanja pasar subuh siap salin & saran mitigasi susut.
+ */
+export async function recommendRestockAndFreshness(
+  items: InventoryItem[],
+  overview: StockOverview
+): Promise<RestockRecommendation> {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  const lowOrOutItems = items.filter((i) => i.status === "OUT" || i.status === "LOW");
+  const leafyItemsAging = items.filter(
+    (i) =>
+      i.category.toLowerCase().includes("daun") &&
+      i.oldestBatchAgeHours !== null &&
+      i.oldestBatchAgeHours >= 12
+  );
+
+  const inventorySummaryText = items
+    .map(
+      (i) =>
+        `- ${i.name} [${i.category}]: Stok Fisik ${i.physicalQty} ${i.saleUnit}, Tersedia ${i.availableQty} ${i.saleUnit}, Status: ${i.status}, Usia Batch Tertua: ${i.oldestBatchAgeHours ?? 0} jam`
+    )
+    .join("\n");
+
+  if (apiKey) {
+    const prompt = `Anda adalah Asisten Manajemen Stok & Ahli Logistik Sayuran Pasar Tradisional Indonesia untuk kios "Berkah Mandiri".
+Berikut data ringkasan inventori kios saat ini:
+- Total SKU: ${overview.totalProducts} produk
+- Total Stok Fisik: ${overview.totalPhysicalQty} kg/ikat
+- Stok Menipis (<=10): ${overview.lowStockCount} produk
+- Stok Habis (0): ${overview.outOfStockCount} produk
+- Total Kerugian Susut Tercatat: ${overview.totalSpoilageQty} kg/ikat
+
+Rincian Inventori Produk:
+${inventorySummaryText}
+
+Tugas Anda:
+1. Analisis produk mana yang mendesak harus dibeli di pasar induk subuh besok (urgentRestock: produk yang OUT atau LOW). Tentukan kuantitas rekomendasi belanja yang wajar untuk kios sayur (biasanya 15-40 kg atau 25-50 ikat tergantung jenis komoditas).
+2. Analisis sayuran yang rentan layu karena sudah disimpan lama (freshnessRiskItems: sayuran daun dengan usia batch > 12 jam). Berikan saran taktis (misal: "Bikin promo bundling sore", "Diskon 20% sebelum jam 17:00", "Basahi kain penutup").
+3. Buat teks daftar belanja pasar ringkas (marketShoppingListText) yang siap disalin oleh pedagang ke WhatsApp mitra tani / dibaca di pasar subuh.
+4. Berikan saran umum mitigasi susut (generalAdvice) untuk operasional besok.
+
+Kembalikan HANYA format JSON valid tanpa markdown fence:
+{
+  "summary": "string ringkasan eksekutif 2-3 kalimat",
+  "marketShoppingListText": "string format pesan WhatsApp siap salin dengan emoji dan daftar nomor",
+  "urgentRestock": [
+    {
+      "productName": "string",
+      "currentStock": 0,
+      "saleUnit": "kg",
+      "recommendedRestockQty": 25,
+      "reason": "Stok habis total / perputaran cepat",
+      "urgency": "KRITIS"
+    }
+  ],
+  "freshnessRiskItems": [
+    {
+      "productName": "string",
+      "batchAgeHours": 14,
+      "action": "string saran penanganan cepat"
+    }
+  ],
+  "generalAdvice": "string tips praktis penjual"
+}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          const parsed = JSON.parse(text);
+          const validated = RestockRecommendationSchema.safeParse(parsed);
+          if (validated.success) return validated.data;
+        }
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.warn("Gemini restock recommendation call failed, fallback used:", err);
+    }
+  }
+
+  // Fallback Heuristik Cerdas
+  const urgentRestock = lowOrOutItems.slice(0, 6).map((item) => {
+    const isLeaf = item.category.toLowerCase().includes("daun");
+    const isChili = item.category.toLowerCase().includes("cabai");
+    let recQty = 20;
+    if (item.saleUnit === "ikat") recQty = 35;
+    else if (isChili) recQty = 15;
+    else if (isLeaf) recQty = 25;
+    else recQty = 30;
+
+    return {
+      productName: item.name,
+      currentStock: item.physicalQty,
+      saleUnit: item.saleUnit,
+      recommendedRestockQty: recQty,
+      reason:
+        item.status === "OUT"
+          ? "Stok kosong total di display, permintaan harian tinggi"
+          : `Stok tersisa menipis (${item.physicalQty} ${item.saleUnit}), potensi kehabisan saat jam belanja pagi`,
+      urgency: item.status === "OUT" ? ("KRITIS" as const) : ("TINGGI" as const),
+    };
+  });
+
+  const freshnessRiskItems = leafyItemsAging.slice(0, 4).map((item) => ({
+    productName: item.name,
+    batchAgeHours: item.oldestBatchAgeHours ?? 14,
+    action: `Sudah disimpan ${item.oldestBatchAgeHours ?? 14} jam. Semprot kabut air dingin atau bundling hemat sore ini untuk mencegah daun menguning.`,
+  }));
+
+  const shoppingLines = urgentRestock.map(
+    (u, idx) => `${idx + 1}. ${u.productName}: ${u.recommendedRestockQty} ${u.saleUnit} (${u.urgency === "KRITIS" ? "Prioritas Utama" : "Standar"})`
+  );
+
+  const marketShoppingListText = `*DAFTAR BELANJA PASAR SUBOH — KIOS BERKAH MANDIRI*\nTanggal: ${new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short" })}\n\n${shoppingLines.join("\n")}\n\n*Catatan Pasokan:*\n- Pastikan sayuran daun dipetik subuh / turgor daun segar kaku.\n- Cek kondisi cabai bebas lalat buah & tangkai masih hijau segar.`;
+
+  return {
+    summary: `Terdapat ${lowOrOutItems.length} produk yang stoknya menipis/habis dan membutuhkan restock prioritas di pasar induk subuh besok. Serta ${freshnessRiskItems.length} jenis sayuran daun yang perlu diprioritaskan penjualannya sebelum mengalami penurunan turgor.`,
+    marketShoppingListText,
+    urgentRestock,
+    freshnessRiskItems,
+    generalAdvice:
+      "Terapkan rotasi FIFO ketat: Tempatkan pasokan baru di bagian bawah/belakang, dan pajang sisa pasokan hari ini di depan dengan diskon kombo sayur sup / tumis.",
   };
 }
 
