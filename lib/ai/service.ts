@@ -1,12 +1,14 @@
 import { dataStore } from "@/lib/data/store";
 import {
   OrderDraftResponse,
+  OrderDraftResponseSchema,
   ProductQaResponse,
+  ProductQaResponseSchema,
 } from "./types";
 
 /**
  * AI Adapter untuk AgriPass AI
- * Mendukung model open-weight (Gemma / LLM hosted) dengan fallback rule-based lokal
+ * Mendukung model open-weight / Gemini hosted dengan fallback rule-based lokal
  * Menjaga integritas data: TIDAK membocorkan margin/biaya modal & TIDAK halusinasi data kosong.
  */
 
@@ -14,7 +16,6 @@ export async function answerProductQuestion(
   question: string,
   productPublicId: string
 ): Promise<ProductQaResponse> {
-  // 1. Ambil data publik produk & batch dari dataStore
   const product = dataStore.getProductByPublicId(productPublicId);
 
   if (!product) {
@@ -26,7 +27,6 @@ export async function answerProductQuestion(
     };
   }
 
-  // Hitung total stok tersedia
   const totalSalable = product.batches.reduce((acc: number, b) => acc + b.salableQty, 0);
   const activeBatch = product.batches[0];
 
@@ -81,6 +81,17 @@ export async function answerProductQuestion(
     }
   }
 
+  // 1. Coba panggil Live Gemini API jika API Key terisi
+  const apiKey = process.env.AI_API_KEY;
+  if (apiKey && apiKey.length > 10) {
+    try {
+      const llmResult = await callGeminiForQa(question, product, knownData, unknownData, sources);
+      if (llmResult) return llmResult;
+    } catch (err) {
+      console.warn("Gemini QA call error, falling back to verified local extractor:", err);
+    }
+  }
+
   // 2. Fallback Cerdas Berbasis Data Terverifikasi (Local Rule-Based)
   const qLower = question.toLowerCase();
   let answerText = "";
@@ -112,7 +123,6 @@ export async function answerProductQuestion(
       answerText = `Harga ${product.name} adalah Rp ${product.priceIdr.toLocaleString("id-ID")} per ${product.saleUnit}. Stok tersedia saat ini: ${totalSalable} ${product.saleUnit}.`;
     }
   } else {
-    // Jawaban komprehensif
     answerText = `${product.name} dijual seharga Rp ${product.priceIdr.toLocaleString("id-ID")} per ${product.saleUnit}. `;
     if (activeBatch?.origin) answerText += `Berasal dari ${activeBatch.origin}. `;
     if (activeBatch?.harvestDate) {
@@ -137,11 +147,172 @@ export async function extractOrderDraft(
   _shopSlug?: string
 ): Promise<OrderDraftResponse> {
   const products = dataStore.getProducts(true);
+
+  // 1. Coba panggil Live Gemini jika API Key terisi
+  const apiKey = process.env.AI_API_KEY;
+  if (apiKey && apiKey.length > 10) {
+    try {
+      const liveResult = await callGeminiForOrderDraft(message, products);
+      if (liveResult) return liveResult;
+    } catch (err) {
+      console.warn("Gemini Order extraction error, falling back to local extractor:", err);
+    }
+  }
+
+  // 2. Fallback Rule-Based Parser Lokal yang Kuat & Teruji
   return parseOrderTextLocally(message, products);
 }
 
 /**
- * Parser Lokal Berbasis Aturan untuk Ekstraksi Pesanan Bahasa Indonesia
+ * Live Gemini API call for Product Q&A
+ */
+async function callGeminiForQa(
+  question: string,
+  product: any,
+  knownData: string[],
+  unknownData: string[],
+  sources: any[]
+): Promise<ProductQaResponse | null> {
+  const apiKey = process.env.AI_API_KEY;
+  const prompt = `Anda adalah Asisten Paspor Sayuran AgriPass AI untuk produk "${product.name}".
+Tugas: Jawab pertanyaan pembeli dengan ramah dan akurat dalam bahasa Indonesia.
+Data Publik yang Diketahui:
+${knownData.map((d) => "- " + d).join("\n")}
+
+Data yang Belum Diketahui:
+${unknownData.map((u) => "- " + u).join("\n")}
+
+ATURAN KETAT:
+1. JANGAN HALUSINASI: Jika data panen/asal belum diketahui, katakan dengan jelas bahwa belum dicatat.
+2. JANGAN bocorkan modal harga beli atau persentase margin keuntungan.
+3. Pertanyaan Pembeli: "${question}"
+
+Berikan jawaban langsung berupa teks singkat (maksimal 3 kalimat) yang informatif dan jujur.`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 250, temperature: 0.2 },
+        }),
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return {
+          answer: text.trim(),
+          knownDataUsed: knownData,
+          unknownDataFlagged: unknownData,
+          sources: [
+            ...sources,
+            {
+              title: "Gemini 2.5/Flash AI Engine",
+              sourceType: "AI_INFERENCE",
+              detail: "Model inferensi langsung berbasis grounded passport data",
+            },
+          ],
+        };
+      }
+    }
+  } catch (e) {
+    clearTimeout(timeoutId);
+  }
+  return null;
+}
+
+/**
+ * Live Gemini API call for Order Extraction
+ */
+async function callGeminiForOrderDraft(
+  message: string,
+  products: any[]
+): Promise<OrderDraftResponse | null> {
+  const apiKey = process.env.AI_API_KEY;
+  const catalogList = products
+    .map((p) => `${p.name} (id: ${p.id}, unit: ${p.saleUnit}, harga: Rp ${p.priceIdr})`)
+    .join("\n");
+
+  const prompt = `Anda adalah AI Ekstraksi Pesanan Sayuran AgriPass.
+Daftar Katalog Produk Tersedia:
+${catalogList}
+
+Pesan Pelanggan: "${message}"
+
+Tugas: Ekstrak pesanan menjadi JSON murni yang sesuai dengan skema:
+{
+  "intent": "create_order_draft",
+  "items": [
+    {
+      "productId": "string id dari katalog atau null jika tidak yakin",
+      "productName": "nama produk",
+      "originalText": "potongan teks asli",
+      "quantity": number atau null,
+      "unit": "string satuan",
+      "budgetIdr": number atau null,
+      "needsClarification": boolean,
+      "clarificationNote": "catatan jika butuh klarifikasi"
+    }
+  ],
+  "fulfillment": {
+    "method": "PICKUP" atau "DELIVERY",
+    "requestedTimeText": "string waktu seperti 'sore'",
+    "deliveryAddress": "string alamat jika ada"
+  },
+  "questions": ["daftar pertanyaan jika ambigu, misal cabai merah vs rawit"],
+  "requiresConfirmation": true
+}
+
+Hanya kembalikan JSON tanpa markdown code block.`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" },
+        }),
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        const parsed = JSON.parse(text);
+        const validated = OrderDraftResponseSchema.safeParse(parsed);
+        if (validated.success) return validated.data;
+      }
+    }
+  } catch (e) {
+    clearTimeout(timeoutId);
+  }
+  return null;
+}
+
+/**
+ * Parser Lokal Berbasis Aturan untuk Ekstraksi Pesanan Bahasa Indonesia (Fallback)
  */
 function parseOrderTextLocally(
   message: string,
@@ -151,7 +322,6 @@ function parseOrderTextLocally(
   const questions: string[] = [];
   const lowerMsg = message.toLowerCase();
 
-  // 1. Deteksi Fulfillment & Waktu & Alamat
   const isDelivery =
     lowerMsg.includes("antar") ||
     lowerMsg.includes("kirim") ||
@@ -165,14 +335,12 @@ function parseOrderTextLocally(
   else if (lowerMsg.includes("sore")) requestedTimeText = "Sore hari";
   else if (lowerMsg.includes("malam")) requestedTimeText = "Malam hari";
 
-  // Cek alamat sederhana
   let deliveryAddress: string | null = null;
   const addressMatch = message.match(/(?:ke|alamat(?:\s*:\s*|\s+))\s*([^,\n.]+)/i);
   if (addressMatch) {
     deliveryAddress = addressMatch[1].trim();
   }
 
-  // 2. Deteksi kasus khusus multi-pilihan seperti "cabai / cabe"
   const hasGenericCabai = /\b(cabai|cabe)\b/i.test(lowerMsg) && !lowerMsg.includes("keriting") && !lowerMsg.includes("rawit");
   if (hasGenericCabai) {
     let budgetIdr: number | null = null;
@@ -197,7 +365,6 @@ function parseOrderTextLocally(
     questions.push("Apakah Anda menginginkan Cabai Merah Keriting atau Cabai Rawit Merah?");
   }
 
-  // 3. Iterasi setiap produk di katalog
   for (const prod of products) {
     const prodName = prod.name.toLowerCase();
     const aliases = prod.aliases ? prod.aliases.toLowerCase().split(",").map((s) => s.trim()) : [];
