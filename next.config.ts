@@ -21,6 +21,18 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    if (process.env.NEXT_PUBLIC_RAILWAY_URL) {
+      const backendUrl = process.env.NEXT_PUBLIC_RAILWAY_URL.replace(/\/$/, "");
+      return [
+        {
+          source: "/api/:path*",
+          destination: `${backendUrl}/api/:path*`,
+        },
+      ];
+    }
+    return [];
+  },
 };
 
 export default nextConfig;
