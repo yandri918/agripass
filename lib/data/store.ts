@@ -62,22 +62,57 @@ initialBatches.forEach((b, idx) => {
 });
 
 // Database Persistence Configuration
-const DB_FILE_PATH =
-  process.env.DATABASE_STORAGE_PATH ||
-  path.join(process.cwd(), "data", "agripass-database.json");
+function getEffectiveDbPath(): string {
+  if (process.env.DATABASE_STORAGE_PATH) {
+    return process.env.DATABASE_STORAGE_PATH;
+  }
+
+  // 1. Try default project data directory
+  const projectPath = path.join(process.cwd(), "data", "agripass-database.json");
+  try {
+    const dir = path.dirname(projectPath);
+    if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
+      fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
+    }
+    const testFile = path.join(dir, `.test-write-${Date.now()}.tmp`);
+    fs.writeFileSync(/*turbopackIgnore: true*/ testFile, "ok", "utf-8");
+    fs.unlinkSync(/*turbopackIgnore: true*/ testFile);
+    return projectPath;
+  } catch {
+    // 2. Fallback to /tmp on Linux/Railway container if /app/data is not writable
+    const fallbackPath =
+      process.platform === "win32"
+        ? path.join(process.cwd(), "agripass-database.json")
+        : "/tmp/agripass-database.json";
+    return fallbackPath;
+  }
+}
+
+let activeDbFilePath = getEffectiveDbPath();
 
 function loadDbFromDisk(): DbState | null {
   try {
-    if (typeof process !== "undefined" && fs.existsSync(/*turbopackIgnore: true*/ DB_FILE_PATH)) {
-      const raw = fs.readFileSync(/*turbopackIgnore: true*/ DB_FILE_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (
-        parsed &&
-        Array.isArray(parsed.products) &&
-        Array.isArray(parsed.batches) &&
-        Array.isArray(parsed.stockMovements)
-      ) {
-        return parsed as DbState;
+    if (typeof process === "undefined") return null;
+
+    // Check effective writable path first, then fallback to repo data path
+    const candidatePaths = [
+      activeDbFilePath,
+      path.join(process.cwd(), "data", "agripass-database.json"),
+    ];
+
+    for (const cand of candidatePaths) {
+      if (fs.existsSync(/*turbopackIgnore: true*/ cand)) {
+        const raw = fs.readFileSync(/*turbopackIgnore: true*/ cand, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          Array.isArray(parsed.products) &&
+          Array.isArray(parsed.batches) &&
+          Array.isArray(parsed.stockMovements)
+        ) {
+          activeDbFilePath = cand;
+          return parsed as DbState;
+        }
       }
     }
   } catch (err) {
@@ -86,19 +121,42 @@ function loadDbFromDisk(): DbState | null {
   return null;
 }
 
+let lastPersistError: string | null = null;
+
 function persistDbToDisk(state?: DbState): void {
   try {
     const targetState = state || globalStore.__agripassDb;
-    if (!targetState) return;
-    const dir = path.dirname(DB_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!targetState || typeof process === "undefined") return;
+
+    let targetPath = activeDbFilePath;
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
+      fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
     }
-    const tempFile = `${DB_FILE_PATH}.tmp`;
-    fs.writeFileSync(tempFile, JSON.stringify(targetState, null, 2), "utf-8");
-    fs.renameSync(tempFile, DB_FILE_PATH);
-  } catch (err) {
-    console.error("Gagal menyimpan database AgriPass ke disk:", err);
+
+    const tempFile = `${targetPath}.${Date.now()}.tmp`;
+    fs.writeFileSync(/*turbopackIgnore: true*/ tempFile, JSON.stringify(targetState, null, 2), "utf-8");
+    fs.renameSync(/*turbopackIgnore: true*/ tempFile, targetPath);
+    lastPersistError = null;
+  } catch (err: any) {
+    console.error("Gagal menyimpan database AgriPass ke disk utama, mencoba fallback:", err);
+    lastPersistError = err?.message || String(err);
+
+    // Fallback emergency save to /tmp
+    try {
+      const emergencyPath =
+        process.platform === "win32"
+          ? path.join(process.cwd(), "agripass-database-fallback.json")
+          : "/tmp/agripass-database.json";
+      const targetState = state || globalStore.__agripassDb;
+      if (targetState) {
+        fs.writeFileSync(/*turbopackIgnore: true*/ emergencyPath, JSON.stringify(targetState, null, 2), "utf-8");
+        activeDbFilePath = emergencyPath;
+        lastPersistError = null;
+      }
+    } catch (e2) {
+      console.error("Emergency persist failed:", e2);
+    }
   }
 }
 
@@ -766,9 +824,9 @@ export const dataStore = {
     let lastModified: string | null = null;
     let exists = false;
     try {
-      if (fs.existsSync(/*turbopackIgnore: true*/ DB_FILE_PATH)) {
+      if (fs.existsSync(/*turbopackIgnore: true*/ activeDbFilePath)) {
         exists = true;
-        const stats = fs.statSync(/*turbopackIgnore: true*/ DB_FILE_PATH);
+        const stats = fs.statSync(/*turbopackIgnore: true*/ activeDbFilePath);
         fileSizeKb = Math.round((stats.size / 1024) * 10) / 10;
         lastModified = stats.mtime.toISOString();
       }
@@ -777,10 +835,11 @@ export const dataStore = {
     return {
       persisted: true,
       storageEngine: "PERSISTENT_FILE_JSON",
-      filePath: DB_FILE_PATH,
+      filePath: activeDbFilePath,
       fileExists: exists,
       fileSizeKb,
       lastModified,
+      lastError: lastPersistError,
       counts: {
         products: db.products.length,
         batches: db.batches.length,
