@@ -15,6 +15,9 @@ import {
   MessageSquare,
   Send,
   Download,
+  Smartphone,
+  Copy,
+  Check,
 } from "lucide-react";
 import { ProductQaResponse } from "@/lib/ai/types";
 
@@ -29,26 +32,34 @@ export default function ProductPassportPage({
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrTargetUrl, setQrTargetUrl] = useState<string>("");
+  const [localIp, setLocalIp] = useState<string>("192.168.11.6");
+  const [useWifiIp, setUseWifiIp] = useState<boolean>(true);
+  const [copied, setCopied] = useState<boolean>(false);
 
   // AI Q&A State
   const [question, setQuestion] = useState("");
   const [qaLoading, setQaLoading] = useState(false);
   const [qaResult, setQaResult] = useState<ProductQaResponse | null>(null);
 
+  // 1. Ambil data produk & IP lokal
   useEffect(() => {
-    async function loadProduct() {
+    async function loadData() {
       try {
-        const res = await fetch(`/api/public/products/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setProduct(data.product);
+        const [prodRes, ipRes] = await Promise.all([
+          fetch(`/api/public/products/${id}`),
+          fetch("/api/network-ip").catch(() => null),
+        ]);
 
-          // Generate QR code
-          const fullUrl = window.location.href;
-          const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(fullUrl)}`);
-          if (qrRes.ok) {
-            const qrJson = await qrRes.json();
-            setQrDataUrl(qrJson.dataUrl);
+        if (prodRes.ok) {
+          const data = await prodRes.json();
+          setProduct(data.product);
+        }
+
+        if (ipRes && ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.localIp && ipData.localIp !== "127.0.0.1") {
+            setLocalIp(ipData.localIp);
           }
         }
       } catch (err) {
@@ -57,8 +68,41 @@ export default function ProductPassportPage({
         setLoading(false);
       }
     }
-    loadProduct();
+    loadData();
   }, [id]);
+
+  // 2. Generate QR code dinamis berdasarkan target host
+  useEffect(() => {
+    async function generateQr() {
+      if (!product) return;
+
+      let target = "";
+      if (typeof window !== "undefined") {
+        const isLocal =
+          window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+        if (isLocal && useWifiIp && localIp) {
+          target = `http://${localIp}:${window.location.port || "3000"}/produk/${id}`;
+        } else {
+          target = window.location.href;
+        }
+      }
+
+      setQrTargetUrl(target);
+
+      try {
+        const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(target)}`);
+        if (qrRes.ok) {
+          const qrJson = await qrRes.json();
+          setQrDataUrl(qrJson.dataUrl);
+        }
+      } catch (err) {
+        console.error("Gagal membuat QR:", err);
+      }
+    }
+
+    generateQr();
+  }, [product, id, useWifiIp, localIp]);
 
   const handleAskQuestion = async (customQ?: string) => {
     const qToAsk = customQ || question;
@@ -79,6 +123,14 @@ export default function ProductPassportPage({
       console.error("Gagal tanya AI:", err);
     } finally {
       setQaLoading(false);
+    }
+  };
+
+  const copyUrlToClipboard = () => {
+    if (navigator.clipboard && qrTargetUrl) {
+      navigator.clipboard.writeText(qrTargetUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -234,10 +286,30 @@ export default function ProductPassportPage({
               <div className="w-full">
                 <div className="text-xs font-bold text-slate-900 mb-1">QR Paspor Produk</div>
                 <p className="text-[11px] text-slate-500">
-                  Scan untuk buka paspor ini di HP pelanggan
+                  Scan kamera HP untuk membuka paspor ini
                 </p>
 
-                <div className="mt-4 p-3 bg-white rounded-2xl shadow-sm inline-block border border-slate-200">
+                {/* Mode Selector for Wi-Fi vs Localhost */}
+                <div className="mt-3 p-1 bg-slate-200/70 rounded-xl flex items-center gap-1 text-[10px] font-bold">
+                  <button
+                    onClick={() => setUseWifiIp(true)}
+                    className={`flex-1 py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                      useWifiIp ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                    }`}
+                  >
+                    <Smartphone className="w-3 h-3 text-emerald-600" /> Mode HP (Wi-Fi)
+                  </button>
+                  <button
+                    onClick={() => setUseWifiIp(false)}
+                    className={`flex-1 py-1 rounded-lg transition ${
+                      !useWifiIp ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                    }`}
+                  >
+                    Localhost
+                  </button>
+                </div>
+
+                <div className="mt-3 p-3 bg-white rounded-2xl shadow-sm inline-block border border-slate-200">
                   {qrDataUrl ? (
                     <img src={qrDataUrl} alt="QR Paspor" className="w-44 h-44 mx-auto rounded-lg" />
                   ) : (
@@ -247,9 +319,24 @@ export default function ProductPassportPage({
                   )}
                 </div>
 
-                <div className="mt-2 text-[10px] font-mono text-slate-400 break-all">
-                  {product.publicId}
+                {/* Target URL with Copy Button */}
+                <div className="mt-2.5 p-2 bg-slate-100 rounded-xl border border-slate-200 text-[10px] text-left flex items-center justify-between gap-2">
+                  <span className="font-mono text-slate-600 truncate">{qrTargetUrl}</span>
+                  <button
+                    onClick={copyUrlToClipboard}
+                    className="p-1 rounded bg-white hover:bg-slate-50 text-slate-700 shadow-xs shrink-0"
+                    title="Salin tautan"
+                  >
+                    {copied ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
+                <p className="text-[9px] text-slate-400 mt-1">
+                  Pastikan HP terhubung ke Wi-Fi yang sama dengan laptop.
+                </p>
               </div>
 
               {qrDataUrl && (

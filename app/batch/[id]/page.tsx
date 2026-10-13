@@ -10,6 +10,9 @@ import {
   ArrowLeft,
   CheckCircle,
   Download,
+  Smartphone,
+  Copy,
+  Check,
 } from "lucide-react";
 
 export default function BatchPassportPage({
@@ -23,21 +26,28 @@ export default function BatchPassportPage({
   const [batchData, setBatchData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrTargetUrl, setQrTargetUrl] = useState<string>("");
+  const [localIp, setLocalIp] = useState<string>("192.168.11.6");
+  const [useWifiIp, setUseWifiIp] = useState<boolean>(true);
+  const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
-    async function loadBatch() {
+    async function loadData() {
       try {
-        const res = await fetch(`/api/public/batches/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setBatchData(data.batch);
+        const [batchRes, ipRes] = await Promise.all([
+          fetch(`/api/public/batches/${id}`),
+          fetch("/api/network-ip").catch(() => null),
+        ]);
 
-          // Generate QR code
-          const fullUrl = window.location.href;
-          const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(fullUrl)}`);
-          if (qrRes.ok) {
-            const qrJson = await qrRes.json();
-            setQrDataUrl(qrJson.dataUrl);
+        if (batchRes.ok) {
+          const data = await batchRes.json();
+          setBatchData(data.batch);
+        }
+
+        if (ipRes && ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.localIp && ipData.localIp !== "127.0.0.1") {
+            setLocalIp(ipData.localIp);
           }
         }
       } catch (err) {
@@ -46,8 +56,48 @@ export default function BatchPassportPage({
         setLoading(false);
       }
     }
-    loadBatch();
+    loadData();
   }, [id]);
+
+  useEffect(() => {
+    async function generateQr() {
+      if (!batchData) return;
+
+      let target = "";
+      if (typeof window !== "undefined") {
+        const isLocal =
+          window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+        if (isLocal && useWifiIp && localIp) {
+          target = `http://${localIp}:${window.location.port || "3000"}/batch/${id}`;
+        } else {
+          target = window.location.href;
+        }
+      }
+
+      setQrTargetUrl(target);
+
+      try {
+        const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(target)}`);
+        if (qrRes.ok) {
+          const qrJson = await qrRes.json();
+          setQrDataUrl(qrJson.dataUrl);
+        }
+      } catch (err) {
+        console.error("Gagal membuat QR:", err);
+      }
+    }
+
+    generateQr();
+  }, [batchData, id, useWifiIp, localIp]);
+
+  const copyUrl = () => {
+    if (navigator.clipboard && qrTargetUrl) {
+      navigator.clipboard.writeText(qrTargetUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   if (loading) {
     return (
@@ -151,11 +201,50 @@ export default function BatchPassportPage({
             {/* QR Label Print */}
             <div className="pt-4 border-t border-slate-100 flex flex-col items-center text-center space-y-3">
               <div className="text-xs font-bold text-slate-900">QR Paspor Batch Ini</div>
+              <p className="text-[11px] text-slate-500">Scan kamera HP untuk membuka paspor ini</p>
+
+              {/* Mode Selector */}
+              <div className="p-1 bg-slate-100 rounded-xl flex items-center gap-1 text-[10px] font-bold w-full max-w-xs">
+                <button
+                  onClick={() => setUseWifiIp(true)}
+                  className={`flex-1 py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                    useWifiIp ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  <Smartphone className="w-3 h-3 text-emerald-600" /> Mode HP (Wi-Fi)
+                </button>
+                <button
+                  onClick={() => setUseWifiIp(false)}
+                  className={`flex-1 py-1 rounded-lg transition ${
+                    !useWifiIp ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  Localhost
+                </button>
+              </div>
+
               {qrDataUrl && (
                 <div className="p-3 bg-white rounded-2xl border shadow-sm">
                   <img src={qrDataUrl} alt="QR Paspor Batch" className="w-40 h-40 rounded-lg" />
                 </div>
               )}
+
+              {/* Target URL with Copy Button */}
+              <div className="p-2 bg-slate-50 rounded-xl border text-[10px] text-left flex items-center justify-between gap-2 w-full max-w-xs">
+                <span className="font-mono text-slate-600 truncate">{qrTargetUrl}</span>
+                <button
+                  onClick={copyUrl}
+                  className="p-1 rounded bg-white hover:bg-slate-100 text-slate-700 shadow-xs shrink-0"
+                  title="Salin tautan"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+
               {qrDataUrl && (
                 <a
                   href={qrDataUrl}
