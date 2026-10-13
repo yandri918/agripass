@@ -11,8 +11,10 @@ import {
   CheckCircle,
   Download,
   Smartphone,
+  Globe,
   Copy,
   Check,
+  Settings,
 } from "lucide-react";
 
 export default function BatchPassportPage({
@@ -28,7 +30,11 @@ export default function BatchPassportPage({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrTargetUrl, setQrTargetUrl] = useState<string>("");
   const [localIp, setLocalIp] = useState<string>("192.168.11.6");
-  const [useWifiIp, setUseWifiIp] = useState<boolean>(true);
+  
+  // Deployment Target Modes: "vercel" (Online) | "wifi" | "localhost"
+  const [deployTarget, setDeployTarget] = useState<"vercel" | "wifi" | "localhost">("vercel");
+  const [vercelDomain, setVercelDomain] = useState<string>("https://agripass.vercel.app");
+  const [showDomainInput, setShowDomainInput] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
@@ -50,6 +56,11 @@ export default function BatchPassportPage({
             setLocalIp(ipData.localIp);
           }
         }
+
+        if (typeof window !== "undefined") {
+          const savedDomain = localStorage.getItem("agripass_vercel_domain");
+          if (savedDomain) setVercelDomain(savedDomain);
+        }
       } catch (err) {
         console.error("Gagal memuat batch paspor:", err);
       } finally {
@@ -64,15 +75,13 @@ export default function BatchPassportPage({
       if (!batchData) return;
 
       let target = "";
-      if (typeof window !== "undefined") {
-        const isLocal =
-          window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-
-        if (isLocal && useWifiIp && localIp) {
-          target = `http://${localIp}:${window.location.port || "3000"}/batch/${id}`;
-        } else {
-          target = window.location.href;
-        }
+      if (deployTarget === "vercel") {
+        const cleanDomain = vercelDomain.trim().replace(/\/$/, "");
+        target = `${cleanDomain.startsWith("http") ? cleanDomain : `https://${cleanDomain}`}/batch/${id}`;
+      } else if (deployTarget === "wifi") {
+        target = `http://${localIp}:3000/batch/${id}`;
+      } else {
+        target = typeof window !== "undefined" ? window.location.href : `http://localhost:3000/batch/${id}`;
       }
 
       setQrTargetUrl(target);
@@ -89,7 +98,14 @@ export default function BatchPassportPage({
     }
 
     generateQr();
-  }, [batchData, id, useWifiIp, localIp]);
+  }, [batchData, id, deployTarget, vercelDomain, localIp]);
+
+  const handleSaveVercelDomain = (newDomain: string) => {
+    setVercelDomain(newDomain);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("agripass_vercel_domain", newDomain);
+    }
+  };
 
   const copyUrl = () => {
     if (navigator.clipboard && qrTargetUrl) {
@@ -201,27 +217,59 @@ export default function BatchPassportPage({
             {/* QR Label Print */}
             <div className="pt-4 border-t border-slate-100 flex flex-col items-center text-center space-y-3">
               <div className="text-xs font-bold text-slate-900">QR Paspor Batch Ini</div>
-              <p className="text-[11px] text-slate-500">Scan kamera HP untuk membuka paspor ini</p>
+              <p className="text-[11px] text-slate-500">Scan kamera HP untuk membuka paspor</p>
 
               {/* Mode Selector */}
               <div className="p-1 bg-slate-100 rounded-xl flex items-center gap-1 text-[10px] font-bold w-full max-w-xs">
                 <button
-                  onClick={() => setUseWifiIp(true)}
+                  onClick={() => setDeployTarget("vercel")}
                   className={`flex-1 py-1 rounded-lg transition flex items-center justify-center gap-1 ${
-                    useWifiIp ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                    deployTarget === "vercel" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
                   }`}
                 >
-                  <Smartphone className="w-3 h-3 text-emerald-600" /> Mode HP (Wi-Fi)
+                  <Globe className="w-3 h-3 text-emerald-600" /> Vercel (Online)
                 </button>
                 <button
-                  onClick={() => setUseWifiIp(false)}
-                  className={`flex-1 py-1 rounded-lg transition ${
-                    !useWifiIp ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                  onClick={() => setDeployTarget("wifi")}
+                  className={`flex-1 py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                    deployTarget === "wifi" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
                   }`}
                 >
-                  Localhost
+                  <Smartphone className="w-3 h-3 text-slate-500" /> Wi-Fi
+                </button>
+                <button
+                  onClick={() => setDeployTarget("localhost")}
+                  className={`flex-1 py-1 rounded-lg transition ${
+                    deployTarget === "localhost" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  Local
                 </button>
               </div>
+
+              {deployTarget === "vercel" && (
+                <div className="w-full max-w-xs text-[10px] text-left">
+                  <button
+                    onClick={() => setShowDomainInput(!showDomainInput)}
+                    className="text-emerald-700 hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <Settings className="w-3 h-3" />
+                    {showDomainInput ? "Sembunyikan Pengaturan Domain" : "Atur Domain Vercel Anda"}
+                  </button>
+                  {showDomainInput && (
+                    <div className="mt-1.5 p-2 bg-white rounded-lg border border-slate-200 space-y-1">
+                      <label className="text-slate-500 block font-medium">Domain Vercel:</label>
+                      <input
+                        type="text"
+                        value={vercelDomain}
+                        onChange={(e) => handleSaveVercelDomain(e.target.value)}
+                        placeholder="https://agripass.vercel.app"
+                        className="w-full p-1.5 text-[10px] border rounded bg-slate-50 font-mono focus:outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {qrDataUrl && (
                 <div className="p-3 bg-white rounded-2xl border shadow-sm">
