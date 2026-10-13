@@ -1,0 +1,202 @@
+// Prisma schema for AgriPass AI
+// Conforms to Section 13 of AgriPass AI Blueprint (Hacktoberfest Week 2)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id                  String       @id @default(uuid())
+  name                String
+  slug                String       @unique
+  timezone            String       @default("Asia/Jakarta")
+  contactPublic       String?
+  fulfillmentSettings String? // JSON string: pickup times, delivery radius, notes
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  users               ShopMember[]
+  suppliers           Supplier[]
+  products            Product[]
+  orders              Order[]
+}
+
+model ShopMember {
+  id        String   @id @default(uuid())
+  shopId    String
+  role      String   @default("OWNER") // OWNER, STAFF
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model Supplier {
+  id             String    @id @default(uuid())
+  shopId         String
+  name           String
+  contactPrivate String?
+  sourceNotes    String?
+  createdAt      DateTime  @default(now())
+
+  shop           Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  batches        Batch[]
+}
+
+model Product {
+  id          String         @id @default(uuid())
+  shopId      String
+  publicId    String         @unique // e.g. "prod_bayam_01" for QR
+  name        String
+  aliases     String? // Comma-separated or JSON array: "bayam hijau, bayam cabut"
+  category    String? // sayur daun, umbi, cabai, buah, polong
+  saleUnit    String // "ikat", "kg", "pack", "gram"
+  priceIdr    Int // Integer Rupiah
+  published   Boolean        @default(true)
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  shop        Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  images      ProductImage[]
+  batches     Batch[]
+  orderItems  OrderItem[]
+}
+
+model ProductImage {
+  id         String   @id @default(uuid())
+  productId  String
+  storageKey String
+  altText    String?
+  createdAt  DateTime @default(now())
+
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Batch {
+  id                 String          @id @default(uuid())
+  productId          String
+  supplierId         String?
+  publicId           String          @unique // e.g. "batch_tom_20261013" for batch QR passport
+  receivedAt         DateTime        @default(now())
+  harvestDate        DateTime?
+  origin             String? // Kebun / Petani / Pasar Asal
+  receivedQty        Float // Kuantitas diterima
+  initialDamageQty   Float           @default(0) // Kerusakan awal saat sortasi
+  salableQty         Float // Kuantitas layak jual = receivedQty - initialDamageQty
+  purchaseCost       Int             @default(0) // Total harga beli IDR
+  freightCost        Int             @default(0) // Alokasi ongkos angkut IDR
+  prepCost           Int             @default(0) // Biaya persiapan IDR
+  unitCost           Float           @default(0) // Biaya per unit layak jual
+  status             String          @default("ACTIVE") // ACTIVE, DEPLETED, ARCHIVED
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier           Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  stockMovements     StockMovement[]
+  reservations       Reservation[]
+  claims             ProductClaim[]
+}
+
+model StockMovement {
+  id        String   @id @default(uuid())
+  batchId   String
+  type      String // INTAKE, SPOILAGE_INITIAL, SPOILAGE_POST, SALE, CORRECTION, RETURN
+  quantity  Float // Positif atau negatif sesuai pergerakan
+  reason    String?
+  orderId   String?
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  batch     Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+}
+
+model Reservation {
+  id          String    @id @default(uuid())
+  orderItemId String
+  batchId     String
+  quantity    Float
+  status      String    @default("ACTIVE") // ACTIVE, FULFILLED, RELEASED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  batch       Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id                     String      @id @default(uuid())
+  shopId                 String
+  publicCode             String      @unique // Kode ringkas ramah manusia, e.g. "ORD-8492"
+  status                 String      @default("SUBMITTED") // DRAFT, SUBMITTED, ACCEPTED, PREPARING, AWAITING_CONFIRMATION, COMPLETED, REJECTED, CANCELLED
+  customerName           String
+  customerContactPrivate String? // WhatsApp / Phone
+  fulfillmentMethod      String      @default("PICKUP") // PICKUP, DELIVERY
+  requestedTimeText      String?
+  deliveryAddress        String?
+  totalSnapshot          Int         @default(0) // Total harga yang disepakati IDR
+  version                Int         @default(1) // Optimistic locking
+  notes                  String?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  shop                   Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items                  OrderItem[]
+}
+
+model OrderItem {
+  id            String        @id @default(uuid())
+  orderId       String
+  productId     String
+  requestedQty  Float
+  actualQty     Float? // Diisi setelah ditimbang/disiapkan oleh penjual
+  unit          String
+  priceSnapshot Int // Harga per unit saat pesanan diterima
+  subtotal      Int // Subtotal IDR
+  notes         String?
+
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  reservations  Reservation[]
+}
+
+model ProductClaim {
+  id                String   @id @default(uuid())
+  batchId           String
+  claim             String // e.g. "Bebas Pestisida Kimia Sintetis"
+  sourceType        String // SELLER_INSPECTION, SUPPLIER_STATEMENT, TEST_DOCUMENT
+  evidenceRef       String? // URL atau referensi dokumen
+  publicationStatus String   @default("PUBLISHED") // DRAFT, PUBLISHED, WITHDRAWN
+  createdAt         DateTime @default(now())
+
+  batch             Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  actorId    String?
+  entityType String // BATCH, ORDER, PRODUCT, STOCK
+  entityId   String
+  action     String // CREATE, UPDATE, ACCEPT, CANCEL, ADJUST
+  beforeAfter String? // JSON diff
+  createdAt  DateTime @default(now())
+}
+
+model AiRun {
+  id                 String   @id @default(uuid())
+  task               String // PRODUCT_QA, ORDER_EXTRACTION
+  modelVersion       String
+  latencyMs          Int
+  schemaValid        Boolean
+  errorType          String?
+  redactedContextRef String?
+  createdAt          DateTime @default(now())
+}
