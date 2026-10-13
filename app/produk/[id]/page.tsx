@@ -37,9 +37,9 @@ export default function ProductPassportPage({
   const [qrTargetUrl, setQrTargetUrl] = useState<string>("");
   const [localIp, setLocalIp] = useState<string>("192.168.11.6");
   
-  // Deployment Target Modes: "vercel" (Online Public) | "wifi" (LAN) | "localhost"
-  const [deployTarget, setDeployTarget] = useState<"vercel" | "wifi" | "localhost">("vercel");
-  const [vercelDomain, setVercelDomain] = useState<string>("https://agripass.vercel.app");
+  // Deployment Target Modes: "wifi" (LAN) | "vercel" (Online Public) | "localhost"
+  const [deployTarget, setDeployTarget] = useState<"wifi" | "vercel" | "localhost">("wifi");
+  const [vercelDomain, setVercelDomain] = useState<string>("");
   const [showDomainInput, setShowDomainInput] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -62,17 +62,34 @@ export default function ProductPassportPage({
           setProduct(data.product);
         }
 
+        let discoveredIp = localIp;
         if (ipRes && ipRes.ok) {
           const ipData = await ipRes.json();
           if (ipData.localIp && ipData.localIp !== "127.0.0.1") {
+            discoveredIp = ipData.localIp;
             setLocalIp(ipData.localIp);
           }
         }
 
-        // Baca domain vercel tersimpan dari localStorage jika ada
+        // Cek apakah sedang berjalan di online production (Vercel / Railway)
         if (typeof window !== "undefined") {
-          const savedDomain = localStorage.getItem("agripass_vercel_domain");
-          if (savedDomain) setVercelDomain(savedDomain);
+          const hostname = window.location.hostname;
+          const isRemote =
+            hostname !== "localhost" &&
+            hostname !== "127.0.0.1" &&
+            !hostname.startsWith("192.168.") &&
+            !hostname.startsWith("10.") &&
+            !hostname.startsWith("172.");
+
+          if (isRemote) {
+            setDeployTarget("vercel");
+            setVercelDomain(window.location.origin);
+          } else {
+            const savedDomain = localStorage.getItem("agripass_vercel_domain");
+            if (savedDomain) {
+              setVercelDomain(savedDomain);
+            }
+          }
         }
       } catch (err) {
         console.error("Gagal memuat paspor produk:", err);
@@ -90,8 +107,15 @@ export default function ProductPassportPage({
 
       let target = "";
       if (deployTarget === "vercel") {
-        const cleanDomain = vercelDomain.trim().replace(/\/$/, "");
-        target = `${cleanDomain.startsWith("http") ? cleanDomain : `https://${cleanDomain}`}/produk/${id}`;
+        if (vercelDomain && vercelDomain.trim()) {
+          const cleanDomain = vercelDomain.trim().replace(/\/$/, "");
+          target = `${cleanDomain.startsWith("http") ? cleanDomain : `https://${cleanDomain}`}/produk/${id}`;
+        } else if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+          target = `${window.location.origin}/produk/${id}`;
+        } else {
+          // Jika domain Vercel belum diisi di lokal, gunakan Wi-Fi IP agar scan tidak error 404
+          target = `http://${localIp}:3000/produk/${id}`;
+        }
       } else if (deployTarget === "wifi") {
         target = `http://${localIp}:3000/produk/${id}`;
       } else {
@@ -344,16 +368,19 @@ export default function ProductPassportPage({
                       <Settings className="w-3 h-3" />
                       {showDomainInput ? "Sembunyikan Pengaturan Domain" : "Atur Domain Vercel Anda"}
                     </button>
-                    {showDomainInput && (
+                    {(showDomainInput || !vercelDomain) && (
                       <div className="mt-1.5 p-2 bg-white rounded-lg border border-slate-200 space-y-1">
-                        <label className="text-slate-500 block font-medium">Domain Vercel:</label>
+                        <label className="text-slate-500 block font-medium">Domain Vercel Anda:</label>
                         <input
                           type="text"
                           value={vercelDomain}
                           onChange={(e) => handleSaveVercelDomain(e.target.value)}
-                          placeholder="https://agripass.vercel.app"
+                          placeholder="https://nama-project.vercel.app"
                           className="w-full p-1.5 text-[10px] border rounded bg-slate-50 font-mono focus:outline-none"
                         />
+                        <p className="text-[9px] text-slate-400">
+                          Masukkan URL Vercel Anda dari dashboard Vercel.
+                        </p>
                       </div>
                     )}
                   </div>
