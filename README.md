@@ -107,8 +107,34 @@ agripass/
 ├── prisma/
 │   └── schema.prisma              # Skema relational database per blueprint
 └── docs/
-    └── product-blueprint.md       # Arsip blueprint lengkap hackathon
-```
+---
+
+## 🌐 Arsitektur Deployment Multi-Platform (Railway + Vercel)
+
+AgriPass dirancang dengan arsitektur **Hybrid Multi-Platform**:
+- **Railway (Website Utama & Operasional Penjual):** Menjalankan dashboard penjual `/seller`, pencatatan batch intake, alur reservasi stok atomik, dan seluruh logika backend operasional.
+- **Vercel (Paspor Publik & Target Scan QR):** Portal ultra-cepat untuk pelanggan saat memindai kode QR fisik pada kemasan sayuran (`/produk/[id]`, `/batch/[id]`, `/toko/[slug]`).
+
+### 1. Deploy Website Utama ke Railway
+1. Buat proyek baru di [Railway.app](https://railway.app) &rarr; **Deploy from GitHub repo** &rarr; Pilih `yandri918/agripass`.
+2. Buka tab **Variables**, tambahkan environment variables:
+   ```env
+   AI_PROVIDER=gemini
+   AI_API_KEY=your_gemini_api_key_here
+   AI_MODEL=gemini-flash-latest
+   ```
+3. Buka tab **Settings** &rarr; **Networking**, klik **Generate Domain** (contoh: `https://agripass-production.up.railway.app`).
+
+### 2. Deploy Portal Scan Paspor ke Vercel
+1. Buka [Vercel Dashboard](https://vercel.com) &rarr; **Add New Project** &rarr; Import `yandri918/agripass`.
+2. Di bagian **Environment Variables**, masukkan:
+   ```env
+   NEXT_PUBLIC_RAILWAY_URL=https://agripass-production.up.railway.app
+   AI_PROVIDER=gemini
+   AI_API_KEY=your_gemini_api_key_here
+   AI_MODEL=gemini-flash-latest
+   ```
+3. Klik **Deploy**. Semua pemanggilan data dari portal paspor di Vercel otomatis tersinkronisasi ke backend Railway secara live melalui Next.js rewrites tanpa kendala CORS.
 
 ---
 
