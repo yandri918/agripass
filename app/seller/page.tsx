@@ -38,13 +38,27 @@ import {
   AlertOctagon,
   Database,
   Download,
+  TrendingUp,
+  BarChart3,
+  PieChart,
+  DollarSign,
+  Percent,
+  Award,
+  Calculator,
+  Wallet,
+  Store,
+  Truck,
+  Printer,
 } from "lucide-react";
 import {
   Batch,
+  CommodityPerformance,
   InventoryItem,
+  MarginSimulationItem,
   MovementType,
   Order,
   Product,
+  ProfitAnalyticsSummary,
   StockMovementWithDetails,
   StockOverview,
   Supplier,
@@ -52,7 +66,9 @@ import {
 import { RestockRecommendation, VisualInspectionResponse } from "@/lib/ai/types";
 
 export default function SellerDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"today" | "stock" | "intake" | "products" | "orders">("today");
+  const [activeTab, setActiveTab] = useState<
+    "today" | "analytics" | "stock" | "intake" | "products" | "orders"
+  >("today");
 
   // Seller Authentication Gate (PIN)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -152,14 +168,23 @@ export default function SellerDashboardPage() {
   const [weighingOrder, setWeighingOrder] = useState<Order | null>(null);
   const [weighedItems, setWeighedItems] = useState<{ [itemId: string]: number }>({});
 
+  // Profit & Commodity Analytics States
+  const [analyticsData, setAnalyticsData] = useState<ProfitAnalyticsSummary | null>(null);
+  const [commoditySearch, setCommoditySearch] = useState<string>("");
+  const [commodityCategoryFilter, setCommodityCategoryFilter] = useState<string>("ALL");
+  const [commoditySortBy, setCommoditySortBy] = useState<"revenue" | "profit" | "soldQty" | "margin">("revenue");
+  const [customTargetMargin, setCustomTargetMargin] = useState<number>(30);
+  const [downloadingCsv, setDownloadingCsv] = useState<boolean>(false);
+
   const loadAllData = async () => {
     try {
-      const [prodRes, batchRes, orderRes, stockRes, dbRes] = await Promise.all([
+      const [prodRes, batchRes, orderRes, stockRes, dbRes, analyticsRes] = await Promise.all([
         fetch("/api/public/shops/berkah-mandiri/products"),
         fetch("/api/seller/batches"),
         fetch("/api/seller/orders"),
         fetch("/api/seller/stock"),
         fetch("/api/seller/database"),
+        fetch("/api/seller/analytics"),
       ]);
 
       if (prodRes.ok) {
@@ -184,10 +209,73 @@ export default function SellerDashboardPage() {
         const d = await dbRes.json();
         if (d.success) setDbInfo(d.info);
       }
+      if (analyticsRes.ok) {
+        const d = await analyticsRes.json();
+        if (d.success) setAnalyticsData(d.analytics);
+      }
     } catch (err) {
       console.error("Gagal memuat data dashboard:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportAnalyticsCsv = () => {
+    if (!analyticsData) return;
+    setDownloadingCsv(true);
+
+    try {
+      const nowStr = new Date().toISOString().split("T")[0];
+      let csv = "\uFEFF"; // UTF-8 BOM for Indonesian Excel compatibility
+
+      // 1. Header & Financial Overview
+      csv += "=== LAPORAN ANALITIK KEUNTUNGAN & KOMODITAS TERLARIS AGRIPASS AI ===\r\n";
+      csv += `Waktu Cetak,${new Date().toLocaleString("id-ID")}\r\n`;
+      csv += `Toko,Kios Sayur Berkah Mandiri\r\n\r\n`;
+
+      csv += "=== RINGKASAN FINANSIAL OPERASIONAL ===\r\n";
+      csv += `Total Pesanan Selesai,${analyticsData.totalCompletedOrders} transaksi\r\n`;
+      csv += `Total Omset Penjualan,Rp ${analyticsData.totalRevenueIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Total Modal Barang (HPP/COGS),Rp ${analyticsData.totalCogsIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Laba Kotor Bersih,Rp ${analyticsData.totalGrossProfitIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Rata-rata Margin Keuntungan,${analyticsData.averageGrossMarginPercent}%\r\n`;
+      csv += `Rata-rata Markup Modal,${analyticsData.averageMarkupPercent}%\r\n`;
+      csv += `Rata-rata Belanja per Transaksi (AOV),Rp ${analyticsData.averageOrderValueIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Nilai Modal Aset Sisa Stok,Rp ${analyticsData.totalStockAssetCostIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Potensi Omset Sisa Stok,Rp ${analyticsData.totalPotentialRetailValueIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Proyeksi Potensi Laba Sisa Stok,Rp ${analyticsData.potentialRemainingProfitIdr.toLocaleString("id-ID")}\r\n`;
+      csv += `Kerugian Susut & Sortasi,Rp ${analyticsData.totalSpoilageLossCostIdr.toLocaleString("id-ID")} (${analyticsData.totalSpoilageQty} kg/ikat)\r\n\r\n`;
+
+      // 2. Commodities Performance
+      csv += "=== PERINGKAT KOMODITAS TERLARIS & MARGIN ===\r\n";
+      csv += "Peringkat,Nama Sayuran,Kategori,Satuan,Terjual,Omset (Rp),Modal HPP (Rp),Laba Kotor (Rp),Margin (%),Harga Jual Saat Ini (Rp),Modal Unit (Rp),Kecepatan Perputaran,Sisa Stok di Kios\r\n";
+
+      analyticsData.topCommodities.forEach((c, idx) => {
+        csv += `${idx + 1},"${c.name}","${c.category}","${c.saleUnit}",${c.soldQty},${c.revenueIdr},${c.cogsIdr},${c.grossProfitIdr},${c.grossMarginPercent}%,${c.currentPrice},${c.averageUnitCost},"${c.velocity}",${c.stockAvailable}\r\n`;
+      });
+
+      // 3. Completed Orders
+      csv += "\r\n=== RIWAYAT TRANSAKSI SELESAI TERAKHIR ===\r\n";
+      csv += "No Pesanan,Pelanggan,Metode Pengiriman,Waktu Selesai,Rincian Item Sayuran,Omset (Rp),Modal (Rp),Laba Kotor (Rp),Margin (%)\r\n";
+
+      analyticsData.recentCompletedOrders.forEach((o) => {
+        csv += `"${o.publicCode}","${o.customerName}","${o.fulfillmentMethod}","${o.completedAt}","${o.itemSummary.replace(/"/g, '""')}",${o.revenueIdr},${o.cogsIdr},${o.profitIdr},${o.marginPercent}%\r\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `agripass-rekap-keuntungan-${nowStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Gagal export CSV:", err);
+      alert("Gagal mengunduh file CSV.");
+    } finally {
+      setDownloadingCsv(false);
     }
   };
 
@@ -490,6 +578,26 @@ export default function SellerDashboardPage() {
   const totalRevenueCompleted = completedOrders.reduce((sum, o) => sum + o.totalSnapshot, 0);
   const lowStockProducts = products.filter((p) => p.totalStock <= 5);
 
+  // Filtered and Sorted Commodities for Profit Analytics
+  const filteredCommodities = (analyticsData?.topCommodities || [])
+    .filter((c) => {
+      const q = commoditySearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q);
+      const matchesCat =
+        commodityCategoryFilter === "ALL" ||
+        c.category.toLowerCase() === commodityCategoryFilter.toLowerCase();
+      return matchesSearch && matchesCat;
+    })
+    .sort((a, b) => {
+      if (commoditySortBy === "profit") return b.grossProfitIdr - a.grossProfitIdr;
+      if (commoditySortBy === "soldQty") return b.soldQty - a.soldQty;
+      if (commoditySortBy === "margin") return b.grossMarginPercent - a.grossMarginPercent;
+      return b.revenueIdr - a.revenueIdr;
+    });
+
   if (checkingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-xs text-slate-500">
@@ -629,6 +737,23 @@ export default function SellerDashboardPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab("analytics")}
+            className={`py-3.5 px-2 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+              activeTab === "analytics"
+                ? "border-emerald-800 text-emerald-800"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 text-emerald-700" />
+            Analitik & Margin
+            {analyticsData && (
+              <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 text-[10px] font-black">
+                {analyticsData.averageGrossMarginPercent}%
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab("stock")}
             className={`py-3.5 px-2 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
               activeTab === "stock"
@@ -729,6 +854,35 @@ export default function SellerDashboardPage() {
               </div>
             </div>
 
+            {/* Profit & Margin Highlights Banner */}
+            <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-2xl p-5 text-white shadow-md border border-emerald-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-800/90 text-lime-300 text-[10px] font-bold">
+                  <TrendingUp className="w-3.5 h-3.5" /> RINGKASAN PROFITABILITAS & MARGIN
+                </div>
+                <div className="flex flex-wrap items-baseline gap-3 mt-1">
+                  <div className="text-xl sm:text-2xl font-black text-lime-300">
+                    Laba Kotor: Rp {(analyticsData?.totalGrossProfitIdr || 0).toLocaleString("id-ID")}
+                  </div>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-800 text-emerald-100 border border-emerald-700">
+                    Margin: {analyticsData?.averageGrossMarginPercent || 0}%
+                  </span>
+                  <span className="text-xs text-slate-300">
+                    (Omset: Rp {(analyticsData?.totalRevenueIdr || 0).toLocaleString("id-ID")} • Modal HPP: Rp {(analyticsData?.totalCogsIdr || 0).toLocaleString("id-ID")})
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-200/90">
+                  Potensi laba sisa stok di kios: <strong className="text-white">Rp {(analyticsData?.potentialRemainingProfitIdr || 0).toLocaleString("id-ID")}</strong> ({analyticsData?.potentialRemainingMarginPercent || 0}% potensi margin jika terjual)
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab("analytics")}
+                className="px-4 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-emerald-950 font-black text-xs shadow-sm transition flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <BarChart3 className="w-4 h-4" /> Buka Laporan Analitik & Komoditas &rarr;
+              </button>
+            </div>
+
             {/* Quick Actions & Urgent Orders */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Urgent Orders (2 cols) */}
@@ -819,7 +973,567 @@ export default function SellerDashboardPage() {
           </div>
         )}
 
-        {/* TAB 2: MANAJEMEN STOK */}
+        {/* TAB: ANALITIK PROFITABILITAS, MARGIN & KOMODITAS */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
+            {/* Header / Intro Action Card */}
+            <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-3xl p-6 text-white shadow-md border border-emerald-800/80 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-800/90 text-lime-300 text-xs font-bold">
+                  <TrendingUp className="w-3.5 h-3.5" /> AGRI-FINANCE ENGINE • BLUEPRINT PASAR RAKYAT
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Laporan Laba Kotor, Margin & Komoditas Terlaris
+                </h2>
+                <p className="text-xs sm:text-sm text-emerald-200/90 max-w-2xl leading-relaxed">
+                  Pantau kesehatan finansial kios secara transparan: evaluasi modal HPP aktual (COGS), hitung kerugian susut sortasi fisik, ketahui sayuran paling menguntungkan, dan simulasikan harga jual optimal.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+                <button
+                  onClick={handleExportAnalyticsCsv}
+                  disabled={downloadingCsv || !analyticsData}
+                  className="px-4 py-3 rounded-xl bg-lime-400 hover:bg-lime-300 text-emerald-950 font-black text-xs shadow-md transition flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50"
+                  title="Unduh seluruh rekap keuangan, margin dan komoditas ke file CSV Excel"
+                >
+                  <Download className="w-4 h-4 text-emerald-950" />
+                  <span>{downloadingCsv ? "Menyiapkan File..." : "Unduh Rekap Excel (CSV)"}</span>
+                </button>
+
+                <button
+                  onClick={loadAllData}
+                  className="px-3.5 py-3 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-white font-bold text-xs border border-emerald-700/70 transition flex items-center justify-center gap-1.5"
+                  title="Sinkronisasi kalkulasi mutasi dan transaksi terbaru"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-lime-400" />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Core Financial KPI Scorecards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Total Omset (Revenue) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                  <span>Total Omset Penjualan</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-emerald-950 mt-2">
+                  Rp {(analyticsData?.totalRevenueIdr || 0).toLocaleString("id-ID")}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                  <span className="font-bold text-slate-700">{analyticsData?.totalCompletedOrders || 0}</span> transaksi selesai ({analyticsData?.pickupOrdersCount || 0} kios • {analyticsData?.deliveryOrdersCount || 0} antar)
+                </div>
+              </div>
+
+              {/* 2. Total Modal Barang Terjual (COGS / HPP) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                  <span>Total Modal HPP (COGS)</span>
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+                    <Store className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-slate-800 mt-2">
+                  Rp {(analyticsData?.totalCogsIdr || 0).toLocaleString("id-ID")}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Modal beli petani + ongkir per unit riil
+                </div>
+              </div>
+
+              {/* 3. Laba Kotor Bersih (Gross Profit) */}
+              <div className="bg-white p-5 rounded-2xl border border-emerald-200/90 shadow-sm relative overflow-hidden bg-gradient-to-b from-white to-emerald-50/30">
+                <div className="flex items-center justify-between text-xs font-semibold text-emerald-800">
+                  <span className="font-bold">Laba Kotor Bersih</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-emerald-700 mt-2">
+                  Rp {(analyticsData?.totalGrossProfitIdr || 0).toLocaleString("id-ID")}
+                </div>
+                <div className="text-[11px] text-emerald-800 font-semibold mt-1 flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[10px] font-black">
+                    +{analyticsData?.averageMarkupPercent || 0}%
+                  </span>
+                  <span>Rata-rata Markup Modal</span>
+                </div>
+              </div>
+
+              {/* 4. Margin Keuntungan & Nilai Keranjang (AOV) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                  <span>Rata-rata Gross Margin</span>
+                  <div className="w-7 h-7 rounded-lg bg-lime-100 text-lime-800 flex items-center justify-center">
+                    <Percent className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-emerald-900 mt-2 flex items-baseline gap-1">
+                  <span>{analyticsData?.averageGrossMarginPercent || 0}%</span>
+                  <span className="text-xs font-normal text-slate-400">dari omset</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Rata-rata Belanja: <strong className="text-slate-700">Rp {(analyticsData?.averageOrderValueIdr || 0).toLocaleString("id-ID")}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-KPI: Valuasi Sisa Stok vs Dampak Kerugian Susut Sortasi */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Valuasi Stok & Potensi Laba Tersisa */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                      <Boxes className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">Valuasi & Proyeksi Sisa Stok di Kios</h3>
+                      <p className="text-[11px] text-slate-500">Nilai modal aset dan potensi keuntungan dari stok sayur saat ini</p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                    {analyticsData?.totalPhysicalStockQty || 0} kg/ikat tersedia
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                  <div className="p-3 rounded-xl bg-slate-50">
+                    <span className="text-[10px] font-semibold text-slate-400 block">Modal Aset Fisik</span>
+                    <span className="font-black text-slate-800 text-xs sm:text-sm block mt-0.5">
+                      Rp {(analyticsData?.totalStockAssetCostIdr || 0).toLocaleString("id-ID")}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50">
+                    <span className="text-[10px] font-semibold text-slate-400 block">Potensi Omset Ritel</span>
+                    <span className="font-black text-slate-800 text-xs sm:text-sm block mt-0.5">
+                      Rp {(analyticsData?.totalPotentialRetailValueIdr || 0).toLocaleString("id-ID")}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                    <span className="text-[10px] font-bold text-emerald-800 block">Potensi Laba Kotor</span>
+                    <span className="font-black text-emerald-700 text-xs sm:text-sm block mt-0.5">
+                      Rp {(analyticsData?.potentialRemainingProfitIdr || 0).toLocaleString("id-ID")}
+                    </span>
+                    <span className="text-[9px] font-bold text-emerald-600 block mt-0.5">
+                      ({analyticsData?.potentialRemainingMarginPercent || 0}% margin)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Dampak Finansial Susut Timbangan & Sortasi */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-red-100 text-red-700 flex items-center justify-center">
+                      <TrendingDown className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">Kerugian Finansial Susut & Sortasi (Waste)</h3>
+                      <p className="text-[11px] text-slate-500">Nilai modal barang yang hilang akibat sortasi subuh dan kelayuan daun</p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-bold">
+                    Audit HPP Hangus
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                  <div className="p-3 rounded-xl bg-red-50/60 border border-red-100">
+                    <span className="text-[10px] font-semibold text-red-700 block">Total Kerugian Modal HPP</span>
+                    <span className="font-black text-red-600 text-sm sm:text-base block mt-0.5">
+                      Rp {(analyticsData?.totalSpoilageLossCostIdr || 0).toLocaleString("id-ID")}
+                    </span>
+                    <span className="text-[9px] text-red-700 block mt-0.5">Beban modal hilang tidak tertagih</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50">
+                    <span className="text-[10px] font-semibold text-slate-400 block">Volume Sayur Terbuang</span>
+                    <span className="font-black text-slate-800 text-sm sm:text-base block mt-0.5">
+                      {analyticsData?.totalSpoilageQty || 0} <span className="text-xs font-normal text-slate-500">kg/ikat</span>
+                    </span>
+                    <span className="text-[9px] text-slate-500 block mt-0.5">Daun busuk, akar tanah, & sortasi awal</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Peringkat Komoditas Terlaris & Margin (Top Commodities Performance Table) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Award className="w-5 h-5 text-amber-500" />
+                    <h3 className="font-black text-slate-900 text-base">
+                      Peringkat Performa Komoditas Sayuran
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Evaluasi omset, laba kotor, margin %, dan kecepatan perputaran (velocity) tiap komoditas sayur.
+                  </p>
+                </div>
+
+                {/* Filter and Search Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama sayuran..."
+                      value={commoditySearch}
+                      onChange={(e) => setCommoditySearch(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-slate-50 focus:bg-white w-40 sm:w-48 transition"
+                    />
+                  </div>
+
+                  <select
+                    value={commodityCategoryFilter}
+                    onChange={(e) => setCommodityCategoryFilter(e.target.value)}
+                    className="py-1.5 px-3 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-600 text-slate-700 font-medium"
+                  >
+                    <option value="ALL">Semua Kategori</option>
+                    <option value="Sayuran Daun">Sayuran Daun</option>
+                    <option value="Sayuran Buah">Sayuran Buah</option>
+                    <option value="Bumbu Dapur">Bumbu Dapur</option>
+                    <option value="Umbi-umbian">Umbi-umbian</option>
+                  </select>
+
+                  <select
+                    value={commoditySortBy}
+                    onChange={(e: any) => setCommoditySortBy(e.target.value)}
+                    className="py-1.5 px-3 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-emerald-600 text-slate-700 font-semibold"
+                  >
+                    <option value="revenue">Urutkan: Omset Tertinggi</option>
+                    <option value="profit">Urutkan: Laba Tertinggi</option>
+                    <option value="soldQty">Urutkan: Terjual Terbanyak</option>
+                    <option value="margin">Urutkan: Margin % Tertinggi</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4">Peringkat & Sayuran</th>
+                      <th className="py-3 px-3">Rotasi</th>
+                      <th className="py-3 px-3 text-right">Terjual</th>
+                      <th className="py-3 px-3 text-right">Omset (Rp)</th>
+                      <th className="py-3 px-3 text-right">Modal HPP (Rp)</th>
+                      <th className="py-3 px-3 text-right">Laba Kotor</th>
+                      <th className="py-3 px-3 text-right">Margin (%)</th>
+                      <th className="py-3 px-4 text-center">Sisa Stok</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredCommodities.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-slate-400">
+                          Tidak ada data komoditas yang sesuai dengan kriteria pencarian.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCommodities.map((item, idx) => {
+                        const rank = idx + 1;
+                        return (
+                          <tr key={item.productId} className="hover:bg-slate-50/80 transition">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <span
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                                    rank === 1
+                                      ? "bg-amber-400 text-amber-950 shadow-xs"
+                                      : rank === 2
+                                      ? "bg-slate-300 text-slate-800"
+                                      : rank === 3
+                                      ? "bg-amber-200 text-amber-900"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {rank}
+                                </span>
+                                <div>
+                                  <span className="font-bold text-slate-900 block">{item.name}</span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {item.category} • Rp {item.currentPrice.toLocaleString("id-ID")} / {item.saleUnit}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              {item.velocity === "FAST" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                  ⚡ Fast Moving
+                                </span>
+                              )}
+                              {item.velocity === "MODERATE" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[10px] font-bold">
+                                  🔄 Sedang
+                                </span>
+                              )}
+                              {item.velocity === "SLOW" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium">
+                                  ⏳ Slow Moving
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3 text-right font-semibold text-slate-800">
+                              {item.soldQty} <span className="text-[10px] font-normal text-slate-500">{item.saleUnit}</span>
+                            </td>
+
+                            <td className="py-3 px-3 text-right font-bold text-slate-900">
+                              Rp {item.revenueIdr.toLocaleString("id-ID")}
+                            </td>
+
+                            <td className="py-3 px-3 text-right text-slate-600">
+                              <div>Rp {item.cogsIdr.toLocaleString("id-ID")}</div>
+                              <div className="text-[10px] text-slate-400">HPP ~Rp {item.averageUnitCost.toLocaleString("id-ID")}</div>
+                            </td>
+
+                            <td className="py-3 px-3 text-right">
+                              <span className="font-black text-emerald-700">
+                                Rp {item.grossProfitIdr.toLocaleString("id-ID")}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-right">
+                              <div className="inline-flex items-center gap-1.5 justify-end">
+                                <span
+                                  className={`px-2 py-0.5 rounded font-black text-[11px] ${
+                                    item.grossMarginPercent >= 30
+                                      ? "bg-emerald-100 text-emerald-900"
+                                      : item.grossMarginPercent >= 20
+                                      ? "bg-lime-100 text-lime-900"
+                                      : "bg-amber-100 text-amber-900"
+                                  }`}
+                                >
+                                  {item.grossMarginPercent}%
+                                </span>
+                              </div>
+                              <div className="text-[9px] text-slate-400 mt-0.5">
+                                Markup: +{item.markupPercent}%
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4 text-center">
+                              <div className="inline-flex flex-col items-center">
+                                <span className="font-bold text-slate-800 text-xs">
+                                  {item.stockAvailable} {item.saleUnit}
+                                </span>
+                                {item.stockStatus === "OUT" && (
+                                  <span className="text-[9px] font-bold text-red-600 uppercase">Habis</span>
+                                )}
+                                {item.stockStatus === "LOW" && (
+                                  <span className="text-[9px] font-bold text-amber-600 uppercase">Menipis</span>
+                                )}
+                                {item.stockStatus === "SAFE" && (
+                                  <span className="text-[9px] font-bold text-emerald-600 uppercase">Aman</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Target Margin Pricing Simulator (Blueprint Section 10.2) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 text-emerald-800 font-bold text-xs">
+                    <Calculator className="w-4 h-4 text-emerald-700" />
+                    <span>SIMULATOR PENETAPAN HARGA JUAL RITEL</span>
+                  </div>
+                  <h3 className="font-black text-slate-900 text-lg">
+                    Kalkulator Margin Target Berdasarkan HPP Masuk
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
+                    Pedagang pasar tradisional sering kesulitan menentukan harga jual agar tidak boncos setelah dipotong susut timbangan.
+                    Tentukan target margin yang diinginkan untuk menghitung rekomendasi harga jual (dibulatkan ke kelipatan Rp 500 terdekat).
+                  </p>
+                </div>
+
+                {/* Target Margin Slider / Quick Select Buttons */}
+                <div className="p-3 bg-emerald-50/80 rounded-2xl border border-emerald-200/80 space-y-2 shrink-0">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-emerald-950">Target Margin:</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-800 text-lime-300 font-black text-xs">
+                      {customTargetMargin}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {[20, 25, 30, 35, 40].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={() => setCustomTargetMargin(pct)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                          customTargetMargin === pct
+                            ? "bg-emerald-800 text-white shadow-xs"
+                            : "bg-white text-emerald-900 hover:bg-emerald-100 border border-emerald-200"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {(analyticsData?.marginSimulations || []).map((sim) => {
+                  const targetM = customTargetMargin / 100;
+                  const suggestedPrice = Math.ceil((sim.unitCost / (1 - targetM)) / 500) * 500;
+                  const diffFromCurrent = suggestedPrice - sim.currentPrice;
+                  const potentialProfitPerUnit = suggestedPrice - sim.unitCost;
+
+                  return (
+                    <div
+                      key={sim.productId}
+                      className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-emerald-300 hover:shadow-xs transition space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{sim.productName}</h4>
+                          <span className="text-[10px] text-slate-500">
+                            Modal HPP: <strong className="text-slate-800">Rp {sim.unitCost.toLocaleString("id-ID")}</strong> / {sim.saleUnit}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                            sim.currentMarginPercent >= 30
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          Aktif: {sim.currentMarginPercent}%
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-white border border-slate-200/90 space-y-1 text-xs">
+                        <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                          <span>Harga Jual Saat Ini:</span>
+                          <span className="font-semibold text-slate-900">
+                            Rp {sim.currentPrice.toLocaleString("id-ID")}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-emerald-900 font-bold pt-1 border-t border-slate-100">
+                          <span>Saran Harga ({customTargetMargin}%):</span>
+                          <span className="text-sm font-black text-emerald-800">
+                            Rp {suggestedPrice.toLocaleString("id-ID")}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                        <span>
+                          Potensi Laba: <strong className="text-emerald-700 font-bold">Rp {potentialProfitPerUnit.toLocaleString("id-ID")}</strong>
+                        </span>
+                        {diffFromCurrent > 0 ? (
+                          <span className="text-amber-700 font-bold flex items-center gap-0.5 text-[10px]">
+                            <ArrowUpRight className="w-3 h-3" /> +Rp {diffFromCurrent.toLocaleString("id-ID")}
+                          </span>
+                        ) : diffFromCurrent < 0 ? (
+                          <span className="text-emerald-700 font-bold flex items-center gap-0.5 text-[10px]">
+                            <ArrowDownRight className="w-3 h-3" /> -Rp {Math.abs(diffFromCurrent).toLocaleString("id-ID")}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-semibold text-[10px]">Sudah Sesuai</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Riwayat Transaksi Selesai & Audit Margin Per Order */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-emerald-800" />
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base">
+                      Audit Margin Transaksi Selesai Terakhir
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Rincian omset, modal HPP alokasi batch, dan laba kotor tiap pesanan pelanggan yang telah selesai.
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-slate-400">
+                  {analyticsData?.recentCompletedOrders.length || 0} transaksi ditampilkan
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {(analyticsData?.recentCompletedOrders || []).map((ord) => (
+                  <div
+                    key={ord.orderId}
+                    className="p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50/50 hover:bg-white transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded text-[11px]">
+                          {ord.publicCode}
+                        </span>
+                        <span className="font-bold text-slate-900">{ord.customerName}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-700">
+                          {ord.fulfillmentMethod === "PICKUP" ? "Ambil di Kios" : "Kurir Antar"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 truncate max-w-md">
+                        {ord.itemSummary}
+                      </p>
+                      <span className="text-[10px] text-slate-400 block">
+                        Waktu selesai: {new Date(ord.completedAt).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4 shrink-0 sm:text-right">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Omset / HPP</span>
+                        <span className="font-bold text-slate-900 text-xs block">
+                          Rp {ord.revenueIdr.toLocaleString("id-ID")}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          Modal: Rp {ord.cogsIdr.toLocaleString("id-ID")}
+                        </span>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-right min-w-[100px]">
+                        <span className="text-[10px] font-bold text-emerald-800 block">Laba Kotor</span>
+                        <span className="font-black text-emerald-700 text-xs sm:text-sm block">
+                          Rp {ord.profitIdr.toLocaleString("id-ID")}
+                        </span>
+                        <span className="text-[9px] font-extrabold text-emerald-900 block">
+                          Margin: {ord.marginPercent}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: MANAJEMEN STOK */}
         {activeTab === "stock" && (
           <div className="space-y-6">
             {/* KPI Overview Cards */}

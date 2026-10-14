@@ -222,3 +222,73 @@ export interface StockAdjustmentInput {
   reason: string;
   actorId?: string;
 }
+
+export interface CommodityPerformance {
+  productId: string;
+  publicId: string;
+  name: string;
+  category: string;
+  saleUnit: string;
+  currentPrice: number;
+  averageUnitCost: number;
+  soldQty: number;
+  revenueIdr: number;
+  cogsIdr: number;
+  grossProfitIdr: number;
+  grossMarginPercent: number;
+  markupPercent: number;
+  velocity: "FAST" | "MODERATE" | "SLOW";
+  stockAvailable: number;
+  stockStatus: "SAFE" | "LOW" | "OUT";
+}
+
+export interface MarginSimulationItem {
+  productId: string;
+  productName: string;
+  saleUnit: string;
+  unitCost: number;
+  currentPrice: number;
+  currentMarginPercent: number;
+  suggestedPrice20: number;
+  suggestedPrice30: number;
+  suggestedPrice40: number;
+}
+
+export interface ProfitAnalyticsSummary {
+  totalCompletedOrders: number;
+  totalRevenueIdr: number;
+  totalCogsIdr: number;
+  totalGrossProfitIdr: number;
+  averageGrossMarginPercent: number;
+  averageMarkupPercent: number;
+  averageOrderValueIdr: number;
+
+  totalPhysicalStockQty: number;
+  totalStockAssetCostIdr: number;
+  totalPotentialRetailValueIdr: number;
+  potentialRemainingProfitIdr: number;
+  potentialRemainingMarginPercent: number;
+
+  totalSpoilageQty: number;
+  totalSpoilageLossCostIdr: number;
+
+  pickupOrdersCount: number;
+  pickupRevenueIdr: number;
+  deliveryOrdersCount: number;
+  deliveryRevenueIdr: number;
+
+  topCommodities: CommodityPerformance[];
+  marginSimulations: MarginSimulationItem[];
+  recentCompletedOrders: {
+    orderId: string;
+    publicCode: string;
+    customerName: string;
+    fulfillmentMethod: "PICKUP" | "DELIVERY";
+    completedAt: string;
+    revenueIdr: number;
+    cogsIdr: number;
+    profitIdr: number;
+    marginPercent: number;
+    itemSummary: string;
+  }[];
+}

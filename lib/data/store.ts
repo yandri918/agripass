@@ -3,19 +3,23 @@ import path from "path";
 import {
   initialBatches,
   initialClaims,
+  initialOrders,
   initialProducts,
   initialShop,
   initialSuppliers,
 } from "./seed-data";
 import {
   Batch,
+  CommodityPerformance,
   InventoryItem,
+  MarginSimulationItem,
   MovementType,
   Order,
   OrderItem,
   OrderStatus,
   Product,
   ProductClaim,
+  ProfitAnalyticsSummary,
   Reservation,
   Shop,
   StockAdjustmentInput,
@@ -128,7 +132,7 @@ function persistDbToDisk(state?: DbState): void {
     const targetState = state || globalStore.__agripassDb;
     if (!targetState || typeof process === "undefined") return;
 
-    let targetPath = activeDbFilePath;
+    const targetPath = activeDbFilePath;
     const dir = path.dirname(targetPath);
     if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
       fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
@@ -169,6 +173,10 @@ if (!globalStore.__agripassDb) {
   const fromDisk = loadDbFromDisk();
   if (fromDisk) {
     globalStore.__agripassDb = fromDisk;
+    if (!globalStore.__agripassDb.orders || globalStore.__agripassDb.orders.length === 0) {
+      globalStore.__agripassDb.orders = [...initialOrders];
+      persistDbToDisk(globalStore.__agripassDb);
+    }
   } else {
     globalStore.__agripassDb = {
       shop: { ...initialShop },
@@ -176,7 +184,7 @@ if (!globalStore.__agripassDb) {
       products: [...initialProducts],
       batches: [...initialBatches],
       claims: [...initialClaims],
-      orders: [],
+      orders: [...initialOrders],
       reservations: [],
       stockMovements: [...initialMovements],
     };
@@ -184,6 +192,9 @@ if (!globalStore.__agripassDb) {
   }
 } else if (!globalStore.__agripassDb.stockMovements || globalStore.__agripassDb.stockMovements.length === 0) {
   globalStore.__agripassDb.stockMovements = [...initialMovements];
+  if (!globalStore.__agripassDb.orders || globalStore.__agripassDb.orders.length === 0) {
+    globalStore.__agripassDb.orders = [...initialOrders];
+  }
   persistDbToDisk(globalStore.__agripassDb);
 }
 
@@ -818,6 +829,243 @@ export const dataStore = {
     };
   },
 
+  // --- LAPORAN ANALITIK KEUNTUNGAN, MARGIN & KOMODITAS (Blueprint Section 10 & 16) ---
+  getProfitAnalytics(): ProfitAnalyticsSummary {
+    const completedOrders = db.orders.filter((o) => o.status === "COMPLETED");
+
+    let totalRevenueIdr = 0;
+    let totalCogsIdr = 0;
+
+    // Track per-product metrics
+    const productStatsMap = new Map<
+      string,
+      {
+        soldQty: number;
+        revenueIdr: number;
+        cogsIdr: number;
+        orderCount: number;
+      }
+    >();
+
+    for (const p of db.products) {
+      productStatsMap.set(p.id, {
+        soldQty: 0,
+        revenueIdr: 0,
+        cogsIdr: 0,
+        orderCount: 0,
+      });
+    }
+
+    // Calculate completed order revenues and COGS
+    for (const order of completedOrders) {
+      totalRevenueIdr += order.totalSnapshot;
+      for (const item of order.items) {
+        const qty =
+          item.actualQty !== null && item.actualQty !== undefined
+            ? item.actualQty
+            : item.requestedQty;
+        const itemRev = item.subtotal || Math.round(item.priceSnapshot * qty);
+
+        // Determine unit cost from allocated batch, or product's active/latest batch, or fallback
+        let unitCost = 0;
+        if (item.allocatedBatchId) {
+          const batch = db.batches.find((b) => b.id === item.allocatedBatchId);
+          if (batch) unitCost = batch.unitCost;
+        }
+        if (!unitCost) {
+          const prodBatches = db.batches.filter((b) => b.productId === item.productId);
+          if (prodBatches.length > 0) {
+            unitCost = prodBatches[0].unitCost;
+          }
+        }
+
+        const itemCogs = Math.round(unitCost * qty);
+        totalCogsIdr += itemCogs;
+
+        const stat = productStatsMap.get(item.productId);
+        if (stat) {
+          stat.soldQty += qty;
+          stat.revenueIdr += itemRev;
+          stat.cogsIdr += itemCogs;
+          stat.orderCount += 1;
+        }
+      }
+    }
+
+    const totalGrossProfitIdr = totalRevenueIdr - totalCogsIdr;
+    const averageGrossMarginPercent =
+      totalRevenueIdr > 0 ? Math.round((totalGrossProfitIdr / totalRevenueIdr) * 1000) / 10 : 0;
+    const averageMarkupPercent =
+      totalCogsIdr > 0 ? Math.round((totalGrossProfitIdr / totalCogsIdr) * 1000) / 10 : 0;
+    const averageOrderValueIdr =
+      completedOrders.length > 0 ? Math.round(totalRevenueIdr / completedOrders.length) : 0;
+
+    // Stock valuation & potential remaining profit
+    const activeBatches = db.batches.filter((b) => b.status === "ACTIVE");
+    let totalPhysicalStockQty = 0;
+    let totalStockAssetCostIdr = 0;
+    let totalPotentialRetailValueIdr = 0;
+
+    for (const b of activeBatches) {
+      totalPhysicalStockQty += b.salableQty;
+      totalStockAssetCostIdr += b.salableQty * (b.unitCost || 0);
+      const prod = db.products.find((p) => p.id === b.productId);
+      if (prod) {
+        totalPotentialRetailValueIdr += b.salableQty * prod.priceIdr;
+      }
+    }
+
+    const potentialRemainingProfitIdr = Math.max(0, totalPotentialRetailValueIdr - totalStockAssetCostIdr);
+    const potentialRemainingMarginPercent =
+      totalPotentialRetailValueIdr > 0
+        ? Math.round((potentialRemainingProfitIdr / totalPotentialRetailValueIdr) * 1000) / 10
+        : 0;
+
+    // Spoilage impact
+    const spoilageMovements = db.stockMovements.filter(
+      (m) => m.type === "SPOILAGE_INITIAL" || m.type === "SPOILAGE_POST"
+    );
+    let totalSpoilageQty = 0;
+    let totalSpoilageLossCostIdr = 0;
+    for (const m of spoilageMovements) {
+      const qty = Math.abs(m.quantity);
+      totalSpoilageQty += qty;
+      const batch = db.batches.find((b) => b.id === m.batchId);
+      const cost = batch ? batch.unitCost : 0;
+      totalSpoilageLossCostIdr += qty * cost;
+    }
+
+    // Pickup vs Delivery breakdown
+    const pickupOrders = completedOrders.filter((o) => o.fulfillmentMethod === "PICKUP");
+    const deliveryOrders = completedOrders.filter((o) => o.fulfillmentMethod === "DELIVERY");
+
+    // Top commodities calculation
+    const topCommodities: CommodityPerformance[] = db.products.map((p) => {
+      const stat = productStatsMap.get(p.id) || { soldQty: 0, revenueIdr: 0, cogsIdr: 0, orderCount: 0 };
+      const pBatches = db.batches.filter((b) => b.productId === p.id);
+      const activePBatches = pBatches.filter((b) => b.status === "ACTIVE");
+      const stockAvailable = activePBatches.reduce((sum, b) => sum + b.salableQty, 0);
+      const avgCost = pBatches.length > 0 ? pBatches[0].unitCost : 0;
+      const grossProfit = stat.revenueIdr - stat.cogsIdr;
+      const marginPct =
+        stat.revenueIdr > 0 ? Math.round((grossProfit / stat.revenueIdr) * 1000) / 10 : 0;
+      const markupPct =
+        stat.cogsIdr > 0 ? Math.round((grossProfit / stat.cogsIdr) * 1000) / 10 : 0;
+
+      let velocity: "FAST" | "MODERATE" | "SLOW" = "SLOW";
+      if (stat.soldQty >= 3 || stat.revenueIdr >= 40000) {
+        velocity = "FAST";
+      } else if (stat.soldQty > 0) {
+        velocity = "MODERATE";
+      }
+
+      let stockStatus: "SAFE" | "LOW" | "OUT" = "SAFE";
+      if (stockAvailable === 0) stockStatus = "OUT";
+      else if (stockAvailable <= 10) stockStatus = "LOW";
+
+      return {
+        productId: p.id,
+        publicId: p.publicId,
+        name: p.name,
+        category: p.category,
+        saleUnit: p.saleUnit,
+        currentPrice: p.priceIdr,
+        averageUnitCost: Math.round(avgCost),
+        soldQty: Math.round(stat.soldQty * 10) / 10,
+        revenueIdr: stat.revenueIdr,
+        cogsIdr: stat.cogsIdr,
+        grossProfitIdr: grossProfit,
+        grossMarginPercent: marginPct,
+        markupPercent: markupPct,
+        velocity,
+        stockAvailable: Math.round(stockAvailable * 10) / 10,
+        stockStatus,
+      };
+    });
+
+    // Sort by revenueIdr desc, then soldQty desc
+    topCommodities.sort((a, b) => b.revenueIdr - a.revenueIdr || b.soldQty - a.soldQty);
+
+    // Target margin simulations (Blueprint Section 10.2)
+    const marginSimulations: MarginSimulationItem[] = db.products.map((p) => {
+      const pBatches = db.batches.filter((b) => b.productId === p.id);
+      const cost = pBatches.length > 0 ? pBatches[0].unitCost : Math.round(p.priceIdr * 0.7);
+      const currentMargin =
+        p.priceIdr > 0 ? Math.round(((p.priceIdr - cost) / p.priceIdr) * 1000) / 10 : 0;
+
+      const roundRupiah = (val: number) => Math.ceil(val / 500) * 500;
+
+      return {
+        productId: p.id,
+        productName: p.name,
+        saleUnit: p.saleUnit,
+        unitCost: Math.round(cost),
+        currentPrice: p.priceIdr,
+        currentMarginPercent: currentMargin,
+        suggestedPrice20: roundRupiah(cost / (1 - 0.2)),
+        suggestedPrice30: roundRupiah(cost / (1 - 0.3)),
+        suggestedPrice40: roundRupiah(cost / (1 - 0.4)),
+      };
+    });
+
+    // Recent completed orders summary
+    const recentCompletedOrders = completedOrders.slice(0, 10).map((o) => {
+      let orderCogs = 0;
+      for (const item of o.items) {
+        const qty =
+          item.actualQty !== null && item.actualQty !== undefined
+            ? item.actualQty
+            : item.requestedQty;
+        const b = item.allocatedBatchId ? db.batches.find((bx) => bx.id === item.allocatedBatchId) : null;
+        const uCost = b ? b.unitCost : 0;
+        orderCogs += Math.round(uCost * qty);
+      }
+      const profit = o.totalSnapshot - orderCogs;
+      const marginPct = o.totalSnapshot > 0 ? Math.round((profit / o.totalSnapshot) * 1000) / 10 : 0;
+
+      return {
+        orderId: o.id,
+        publicCode: o.publicCode,
+        customerName: o.customerName,
+        fulfillmentMethod: o.fulfillmentMethod,
+        completedAt: o.updatedAt,
+        revenueIdr: o.totalSnapshot,
+        cogsIdr: orderCogs,
+        profitIdr: profit,
+        marginPercent: marginPct,
+        itemSummary: o.items.map((i) => `${i.productName} (${i.actualQty || i.requestedQty} ${i.unit})`).join(", "),
+      };
+    });
+
+    return {
+      totalCompletedOrders: completedOrders.length,
+      totalRevenueIdr,
+      totalCogsIdr,
+      totalGrossProfitIdr,
+      averageGrossMarginPercent,
+      averageMarkupPercent,
+      averageOrderValueIdr,
+
+      totalPhysicalStockQty: Math.round(totalPhysicalStockQty * 10) / 10,
+      totalStockAssetCostIdr: Math.round(totalStockAssetCostIdr),
+      totalPotentialRetailValueIdr: Math.round(totalPotentialRetailValueIdr),
+      potentialRemainingProfitIdr: Math.round(potentialRemainingProfitIdr),
+      potentialRemainingMarginPercent,
+
+      totalSpoilageQty: Math.round(totalSpoilageQty * 10) / 10,
+      totalSpoilageLossCostIdr: Math.round(totalSpoilageLossCostIdr),
+
+      pickupOrdersCount: pickupOrders.length,
+      pickupRevenueIdr: pickupOrders.reduce((sum, o) => sum + o.totalSnapshot, 0),
+      deliveryOrdersCount: deliveryOrders.length,
+      deliveryRevenueIdr: deliveryOrders.reduce((sum, o) => sum + o.totalSnapshot, 0),
+
+      topCommodities,
+      marginSimulations,
+      recentCompletedOrders,
+    };
+  },
+
   // --- DATABASE PERSISTENCE & BACKUP UTILITIES ---
   getDatabaseInfo() {
     let fileSizeKb = 0;
@@ -891,7 +1139,7 @@ export const dataStore = {
     db.products = [...initialProducts];
     db.batches = [...initialBatches];
     db.claims = [...initialClaims];
-    db.orders = [];
+    db.orders = [...initialOrders];
     db.reservations = [];
     db.stockMovements = [...initialMovements];
 
