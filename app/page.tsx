@@ -1,31 +1,22 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+"use client";
 
 import Link from "next/link";
 import {
-  LayoutDashboard,
   ShoppingBag,
-  QrCode,
   Sparkles,
-  Scale,
   ShieldCheck,
-  TrendingDown,
   ArrowRight,
-  CheckCircle2,
   Lock,
   Database,
-  Boxes,
-  Camera,
-  Clock,
-  ExternalLink,
   Store,
   Users,
   Check,
-  FileText,
-  AlertTriangle,
 } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
 
 export default function HomePage() {
+  const { t, isEn } = useLanguage();
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
       {/* Hero Header with Dual Gateway Concept */}
@@ -35,18 +26,18 @@ export default function HomePage() {
         <div className="relative max-w-5xl mx-auto text-center space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-800/90 border border-emerald-600/60 text-xs font-semibold text-lime-300 shadow-inner">
             <Sparkles className="w-3.5 h-3.5 text-lime-400" />
-            Hacktoberfest Open-Source AI Challenge Week 2
+            {t.heroBadge}
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight max-w-4xl mx-auto">
-            Satu Ekosistem Sayur Pintar, <br />
+            {t.heroTitle1} <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-lime-300 via-emerald-300 to-teal-200">
-              Dua Portal Khusus
+              {t.heroTitle2}
             </span>
           </h1>
 
           <p className="text-sm sm:text-lg text-emerald-100/80 max-w-2xl mx-auto leading-relaxed">
-            Pemisahan tegas antara area belanja konsumen dengan ruang kontrol operasional rahasia pedagang kios, didukung kecerdasan buatan Gemini dan database persisten anti-hilang.
+            {t.heroSubtitle}
           </p>
         </div>
       </section>
@@ -68,19 +59,19 @@ export default function HomePage() {
                 <div className="flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-lime-100 text-emerald-900 text-xs font-black uppercase tracking-wider border border-lime-300">
                     <ShoppingBag className="w-3.5 h-3.5 text-emerald-700" />
-                    Untuk Konsumen & Pembeli
+                    {t.portalBuyerBadge}
                   </span>
                   <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                    Akses Terbuka Bebas
+                    {t.portalBuyerAccess}
                   </span>
                 </div>
 
                 <div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 group-hover:text-emerald-800 transition">
-                    Portal Belanja & Paspor Sayur Segar
+                    {t.portalBuyerTitle}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed">
-                    Pengalaman e-commerce sayur segar harian langsung dari kios terdekat. Lihat asal kebun, rating kesegaran visual, dan pesan cukup dengan chat pesan biasa.
+                    {t.portalBuyerDesc}
                   </p>
                 </div>
 
@@ -91,9 +82,9 @@ export default function HomePage() {
                       1
                     </span>
                     <div>
-                      <strong className="text-slate-900 font-bold block">Katalog Sayuran Segar Real-Time</strong>
+                      <strong className="text-slate-900 font-bold block">{t.portalBuyerFeat1Title}</strong>
                       <span className="text-slate-600">
-                        18 komoditas siap beli lengkap dengan harga eceran dan status ketersediaan rak.
+                        {t.portalBuyerFeat1Desc}
                       </span>
                     </div>
                   </div>
@@ -103,9 +94,9 @@ export default function HomePage() {
                       2
                     </span>
                     <div>
-                      <strong className="text-slate-900 font-bold block">QR Paspor Produk Transparan</strong>
+                      <strong className="text-slate-900 font-bold block">{t.portalBuyerFeat2Title}</strong>
                       <span className="text-slate-600">
-                        Scan QR di keranjang sayur untuk melihat asal kebun petani, waktu panen, dan riwayat mutu.
+                        {t.portalBuyerFeat2Desc}
                       </span>
                     </div>
                   </div>
@@ -115,9 +106,9 @@ export default function HomePage() {
                       3
                     </span>
                     <div>
-                      <strong className="text-slate-900 font-bold block">Asisten AI Ekstraksi Pesanan Teks</strong>
+                      <strong className="text-slate-900 font-bold block">{t.portalBuyerFeat3Title}</strong>
                       <span className="text-slate-600">
-                        Ketik kalimat bebas seperti di WhatsApp (&ldquo;bayam 2 ikat, cabai 10rb antar sore&rdquo;), AI langsung menyusun draf belanja.
+                        {t.portalBuyerFeat3Desc}
                       </span>
                     </div>
                   </div>
@@ -131,19 +122,20 @@ export default function HomePage() {
                   className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 hover:from-emerald-700 hover:to-lime-600 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/20 transition group-hover:scale-[1.01]"
                 >
                   <ShoppingBag className="w-5 h-5" />
-                  <span>Buka Toko Sayur (Katalog Pembeli)</span>
+                  <span>{t.portalBuyerBtn}</span>
                   <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition" />
                 </Link>
 
                 <div className="flex items-center justify-between text-xs text-slate-500 px-1">
                   <span className="flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5 text-emerald-600" /> Tanpa registrasi akun
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    {isEn ? "No account registration required" : "Tanpa registrasi akun"}
                   </span>
                   <Link
                     href="/batch/batch-bayam-hijau-today"
                     className="text-emerald-700 font-bold hover:underline flex items-center gap-1"
                   >
-                    Contoh Paspor QR &rarr;
+                    {isEn ? "Sample QR Passport →" : "Contoh Paspor QR →"}
                   </Link>
                 </div>
               </div>
@@ -163,19 +155,19 @@ export default function HomePage() {
                 <div className="flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-900 text-lime-300 text-xs font-black uppercase tracking-wider border border-emerald-700">
                     <Store className="w-3.5 h-3.5 text-lime-400" />
-                    Khusus Pedagang & Pemilik Kios
+                    {t.portalSellerBadge}
                   </span>
                   <span className="text-[11px] font-bold text-amber-300 bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/80 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-amber-400" /> Terproteksi PIN
+                    <Lock className="w-3 h-3 text-amber-400" /> {t.portalSellerAccess}
                   </span>
                 </div>
 
                 <div>
                   <h2 className="text-2xl sm:text-3xl font-black text-white group-hover:text-lime-300 transition">
-                    Dashboard Operasional, Stok & Gudang
+                    {t.portalSellerTitle}
                   </h2>
                   <p className="text-xs sm:text-sm text-emerald-100/75 mt-2 leading-relaxed">
-                    Pusat kendali pedagang: catat kulakan subuh, kalkulasi harga modal beli (HPP) + susut sortasi, rotasi FIFO anti-layu, dan terima pesanan masuk.
+                    {t.portalSellerDesc}
                   </p>
                 </div>
 
@@ -186,9 +178,9 @@ export default function HomePage() {
                       1
                     </span>
                     <div>
-                      <strong className="text-white font-bold block">Pencatatan Batch Subuh & HPP Modal</strong>
+                      <strong className="text-white font-bold block">{t.portalSellerFeat1Title}</strong>
                       <span className="text-emerald-200/80">
-                        Input harga beli & ongkir, pisahkan susut sortasi awal, dapatkan harga pokok unit layak jual presisi.
+                        {t.portalSellerFeat1Desc}
                       </span>
                     </div>
                   </div>
@@ -198,9 +190,9 @@ export default function HomePage() {
                       2
                     </span>
                     <div>
-                      <strong className="text-white font-bold block">Manajemen Stok FIFO & Catat Susut</strong>
+                      <strong className="text-white font-bold block">{t.portalSellerFeat2Title}</strong>
                       <span className="text-emerald-200/80">
-                        Pantau stok fisik vs siap jual, peringatan sayur daun &gt;12 jam, dan log susut timbangan harian.
+                        {t.portalSellerFeat2Desc}
                       </span>
                     </div>
                   </div>
@@ -210,9 +202,9 @@ export default function HomePage() {
                       3
                     </span>
                     <div>
-                      <strong className="text-white font-bold block">Inspeksi Visual AI & Rekomendasi Restock</strong>
+                      <strong className="text-white font-bold block">{t.portalSellerFeat3Title}</strong>
                       <span className="text-emerald-200/80">
-                        Gemini AI mendeteksi grade mutu dari foto dan menyusun daftar belanja pasar induk siap kirim WhatsApp.
+                        {t.portalSellerFeat3Desc}
                       </span>
                     </div>
                   </div>
@@ -226,16 +218,17 @@ export default function HomePage() {
                   className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-lime-400 to-emerald-400 hover:from-lime-300 hover:to-emerald-300 text-emerald-950 font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg shadow-lime-950/30 transition group-hover:scale-[1.01]"
                 >
                   <Lock className="w-4 h-4 text-emerald-900" />
-                  <span>Buka Dashboard Penjual (PIN: 1234)</span>
+                  <span>{t.portalSellerBtn} (PIN: 1234)</span>
                   <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition" />
                 </Link>
 
                 <div className="flex items-center justify-between text-xs text-emerald-300/80 px-1">
                   <span className="flex items-center gap-1 font-mono text-[11px]">
-                    <Database className="w-3.5 h-3.5 text-lime-400" /> Database Anti-Hilang Aktif
+                    <Database className="w-3.5 h-3.5 text-lime-400" />
+                    {isEn ? "Crash-Proof Database Active" : "Database Anti-Hilang Aktif"}
                   </span>
                   <span className="text-amber-300 font-semibold text-[11px]">
-                    Kerahasiaan modal terlindungi 🔒
+                    {isEn ? "Confidential costs protected 🔒" : "Kerahasiaan modal terlindungi 🔒"}
                   </span>
                 </div>
               </div>
@@ -250,13 +243,17 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto space-y-10">
           <div className="text-center space-y-2 max-w-2xl mx-auto">
             <div className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
-              PRINSIP DESAIN & PRIVASI DATA
+              {isEn ? "DESIGN PRINCIPLES & DATA PRIVACY" : "PRINSIP DESAIN & PRIVASI DATA"}
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-              Mengapa Akses Penjual dan Pembeli Dipisahkan?
+              {isEn
+                ? "Why are Seller and Buyer Portals Strictly Separated?"
+                : "Mengapa Akses Penjual dan Pembeli Dipisahkan?"}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500">
-              Menjaga kerahasiaan bisnis pedagang sembari memberikan transparansi optimal bagi konsumen.
+              {isEn
+                ? "Protecting stall owner trade secrets while delivering maximum transparency to consumers."
+                : "Menjaga kerahasiaan bisnis pedagang sembari memberikan transparansi optimal bagi konsumen."}
             </p>
           </div>
 
@@ -265,9 +262,13 @@ export default function HomePage() {
               <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center">
                 <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="font-black text-slate-900 text-base">Kerahasiaan Modal & Margin</h3>
+              <h3 className="font-black text-slate-900 text-base">
+                {isEn ? "Wholesale Cost & Margin Privacy" : "Kerahasiaan Modal & Margin"}
+              </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Harga beli kulakan pasar induk, biaya ongkir kargo, dan persentase susut sortasi adalah rahasia dapur pedagang. Konsumen hanya melihat harga jual eceran yang adil.
+                {isEn
+                  ? "Central wholesale market purchase prices, cargo logistics fees, and sortation shrinkage rates are protected trade secrets. Shoppers only see fair retail prices."
+                  : "Harga beli kulakan pasar induk, biaya ongkir kargo, dan persentase susut sortasi adalah rahasia dapur pedagang. Konsumen hanya melihat harga jual eceran yang adil."}
               </p>
             </div>
 
@@ -275,9 +276,13 @@ export default function HomePage() {
               <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
                 <Users className="w-5 h-5" />
               </div>
-              <h3 className="font-black text-slate-900 text-base">Fokus Pengalaman Pengguna (UX)</h3>
+              <h3 className="font-black text-slate-900 text-base">
+                {isEn ? "Tailored User Experience (UX)" : "Fokus Pengalaman Pengguna (UX)"}
+              </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Pembeli butuh belanja cepat, melihat foto segar, dan mengetik pesanan tanpa login. Pedagang butuh software POS/ERP untuk timbang aktual dan rotasi stok FIFO.
+                {isEn
+                  ? "Shoppers need frictionless ordering, vivid produce photos, and chat-based carts without passwords. Sellers need full ERP/POS tooling for weigh-ins and FIFO rotation."
+                  : "Pembeli butuh belanja cepat, melihat foto segar, dan mengetik pesanan tanpa login. Pedagang butuh software POS/ERP untuk timbang aktual dan rotasi stok FIFO."}
               </p>
             </div>
 
@@ -285,27 +290,33 @@ export default function HomePage() {
               <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
                 <Database className="w-5 h-5" />
               </div>
-              <h3 className="font-black text-slate-900 text-base">Sinkronisasi Stok Real-Time</h3>
+              <h3 className="font-black text-slate-900 text-base">
+                {isEn ? "Real-Time Inventory Synchronization" : "Sinkronisasi Stok Real-Time"}
+              </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Meskipun visualnya terpisah total, kedua portal terhubung ke 1 engine database persisten yang sama. Begitu ada sayur masuk di gudang, stok pembeli langsung terbarui detik itu juga.
+                {isEn
+                  ? "Despite total UI isolation, both portals share a single atomic database engine. When a new batch arrives at the backroom, shelf availability updates instantaneously."
+                  : "Meskipun visualnya terpisah total, kedua portal terhubung ke 1 engine database persisten yang sama. Begitu ada sayur masuk di gudang, stok pembeli langsung terbarui detik itu juga."}
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION: ALUR END-TO-END DEMO HACKATHON */}
+      {/* SECTION: ALUR END-TO-END DEMO */}
       <section className="bg-slate-100 py-16 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto space-y-10">
           <div className="text-center space-y-2 max-w-2xl mx-auto">
             <div className="inline-block px-3 py-1 bg-lime-100 text-lime-900 rounded-full text-xs font-bold">
-              ALUR SIMULASI DEMO JURI
+              {isEn ? "END-TO-END DEMO WALKTHROUGH" : "ALUR SIMULASI DEMO JURI"}
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-              Bagaimana Kedua Portal Berkolaborasi?
+              {isEn ? "How Both Portals Collaborate Daily" : "Bagaimana Kedua Portal Berkolaborasi?"}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500">
-              Alur operasional sehari-hari dari subuh hingga sore hari dalam satu siklus utuh:
+              {isEn
+                ? "A complete daily operational flow from dawn to evening:"
+                : "Alur operasional sehari-hari dari subuh hingga sore hari dalam satu siklus utuh:"}
             </p>
           </div>
 
@@ -313,44 +324,60 @@ export default function HomePage() {
             {/* Step 1 */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
               <div className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full inline-block">
-                04:30 Subuh (Penjual)
+                {isEn ? "04:30 Dawn (Seller)" : "04:30 Subuh (Penjual)"}
               </div>
-              <h4 className="font-bold text-slate-900 text-sm">Barang Masuk & Hitung HPP</h4>
+              <h4 className="font-bold text-slate-900 text-sm">
+                {isEn ? "Produce Intake & HPP Costing" : "Barang Masuk & Hitung HPP"}
+              </h4>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Petani kirim sayur ke kios. Penjual input penerimaan, Gemini AI inspeksi mutu dari foto, dan HPP layak jual terhitung.
+                {isEn
+                  ? "Farmer delivers fresh produce. Seller logs receipt, Gemini AI inspects quality from photo, and sellable unit HPP is calculated."
+                  : "Petani kirim sayur ke kios. Penjual input penerimaan, Gemini AI inspeksi mutu dari foto, dan HPP layak jual terhitung."}
               </p>
             </div>
 
             {/* Step 2 */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
               <div className="text-[11px] font-bold text-lime-900 bg-lime-200 px-2.5 py-0.5 rounded-full inline-block">
-                07:00 Pagi (Pembeli)
+                {isEn ? "07:00 Morning (Buyer)" : "07:00 Pagi (Pembeli)"}
               </div>
-              <h4 className="font-bold text-slate-900 text-sm">Scan QR & Pesan via Chat AI</h4>
+              <h4 className="font-bold text-slate-900 text-sm">
+                {isEn ? "QR Scan & Natural Language AI Order" : "Scan QR & Pesan via Chat AI"}
+              </h4>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Pembeli scan QR keranjang sayur, cek paspor panen, dan ketik pesanan di chat box. AI langsung mengekstrak item pesanan.
+                {isEn
+                  ? "Shopper scans basket QR, checks origin passport, and types order into chat box. AI extracts cart items directly."
+                  : "Pembeli scan QR keranjang sayur, cek paspor panen, dan ketik pesanan di chat box. AI langsung mengekstrak item pesanan."}
               </p>
             </div>
 
             {/* Step 3 */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
               <div className="text-[11px] font-bold text-teal-900 bg-teal-100 px-2.5 py-0.5 rounded-full inline-block">
-                08:30 Pagi (Penjual)
+                {isEn ? "08:30 Morning (Seller)" : "08:30 Pagi (Penjual)"}
               </div>
-              <h4 className="font-bold text-slate-900 text-sm">Terima & Timbang Aktual</h4>
+              <h4 className="font-bold text-slate-900 text-sm">
+                {isEn ? "Accept & Actual Weighing" : "Terima & Timbang Aktual"}
+              </h4>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Penjual menerima pesanan (stok dicadangkan atomik), timbang berat aktual sayuran, lalu selesaikan pesanan dengan tepat.
+                {isEn
+                  ? "Seller accepts order (atomic stock reserved), weighs actual pack, and completes order seamlessly."
+                  : "Penjual menerima pesanan (stok dicadangkan atomik), timbang berat aktual sayuran, lalu selesaikan pesanan dengan tepat."}
               </p>
             </div>
 
             {/* Step 4 */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
               <div className="text-[11px] font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full inline-block">
-                17:00 Sore (Penjual)
+                {isEn ? "17:00 Evening (Seller)" : "17:00 Sore (Penjual)"}
               </div>
-              <h4 className="font-bold text-slate-900 text-sm">Audit Susut & Rekomendasi Restock</h4>
+              <h4 className="font-bold text-slate-900 text-sm">
+                {isEn ? "Shrinkage Audit & Restock Suggestion" : "Audit Susut & Rekomendasi Restock"}
+              </h4>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Penjual catat daun layu di menu penyesuaian stok. AI Gemini menyusun daftar kulakan pasar subuh siap kirim via WhatsApp.
+                {isEn
+                  ? "Seller records wilted leaves in stock adjustment. Gemini AI prepares dawn wholesale restock list ready for WhatsApp."
+                  : "Penjual catat daun layu di menu penyesuaian stok. AI Gemini menyusun daftar kulakan pasar subuh siap kirim via WhatsApp."}
               </p>
             </div>
           </div>
@@ -364,17 +391,17 @@ export default function HomePage() {
             href="/toko/berkah-mandiri"
             className="px-4 py-2 rounded-xl bg-emerald-900 hover:bg-emerald-800 text-lime-300 font-bold border border-emerald-700 transition"
           >
-            🛒 Buka Katalog Pembeli
+            🛒 {t.portalBuyerBtn}
           </Link>
           <Link
             href="/seller"
             className="px-4 py-2 rounded-xl bg-lime-400 hover:bg-lime-300 text-emerald-950 font-bold transition"
           >
-            🔐 Buka Dashboard Penjual (PIN: 1234)
+            🔐 {t.portalSellerBtn} (PIN: 1234)
           </Link>
         </div>
         <p className="text-emerald-400/60 pt-2">
-          AgriPass AI — Hacktoberfest Open-Source AI Challenge Week 2. Know your produce. Share its story.
+          {t.footerCopyright} {t.footerMotto}
         </p>
       </footer>
     </div>

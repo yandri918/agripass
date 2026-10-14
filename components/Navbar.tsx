@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingBag, Lock, Eye, LogOut } from "lucide-react";
+import { ShoppingBag, Lock, Eye, LogOut, Globe } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
 
 export function Navbar() {
   const pathname = usePathname();
+  const { lang, setLang, t } = useLanguage();
   const isSellerArea = pathname?.startsWith("/seller");
   const isBuyerArea =
     pathname?.startsWith("/toko") ||
@@ -29,7 +31,7 @@ export function Navbar() {
   }, [pathname, isBuyerArea]);
 
   const handleExitBuyerSession = () => {
-    if (confirm("Apakah Anda ingin keluar dari sesi Pembeli untuk berganti peran?")) {
+    if (confirm(t.navExitSessionConfirm)) {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("agripass_role");
         localStorage.removeItem("agripass_role");
@@ -51,68 +53,94 @@ export function Navbar() {
             <span className="leading-tight flex items-center gap-1.5">
               AgriPass <span className="text-xs bg-lime-400/20 text-lime-300 font-semibold px-2 py-0.5 rounded-full border border-lime-400/30">AI</span>
             </span>
-            <span className="text-[10px] text-emerald-300/80 font-normal">Dari barang masuk hingga pesanan siap</span>
+            <span className="text-[10px] text-emerald-300/80 font-normal">{t.brandTagline}</span>
           </div>
         </Link>
 
-        <nav className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium">
-          {isSellerArea ? (
-            <>
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900 border border-emerald-700 text-lime-300 text-xs">
-                <span className="w-2 h-2 rounded-full bg-lime-400 animate-pulse"></span>
-                Mode Operasional Penjual
-              </div>
-              <Link
-                href="/toko/berkah-mandiri?mode=seller_preview"
-                target="_blank"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 transition text-emerald-100"
-                title="Buka tampilan toko seperti yang dilihat pembeli (mode preview)"
-              >
-                <Eye className="w-3.5 h-3.5 text-lime-400" />
-                <span className="hidden sm:inline">Lihat Toko</span> Pembeli
-              </Link>
-            </>
-          ) : activeRole === "buyer" || isBuyerArea ? (
-            <>
-              <Link
-                href="/toko/berkah-mandiri"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime-500 text-emerald-950 font-bold hover:bg-lime-400 shadow-sm transition"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Katalog Belanja</span>
-              </Link>
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900/90 border border-emerald-700 text-lime-300 text-xs">
-                <span className="w-2 h-2 rounded-full bg-lime-400"></span>
-                Sesi Pembeli
-              </div>
-              <button
-                onClick={handleExitBuyerSession}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-emerald-300/70 hover:text-red-200 hover:bg-red-950/60 transition text-xs border border-transparent hover:border-red-800"
-                title="Keluar dari sesi pembeli untuk berganti peran"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Keluar Sesi</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/toko/berkah-mandiri"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/70 hover:bg-emerald-800 border border-emerald-700 transition"
-              >
-                <ShoppingBag className="w-4 h-4 text-lime-400" />
-                <span>Katalog Pembeli</span>
-              </Link>
-              <Link
-                href="/seller"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime-500 text-emerald-950 font-bold hover:bg-lime-400 shadow-sm transition"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>Dashboard Penjual</span>
-              </Link>
-            </>
-          )}
-        </nav>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Language Switcher Pill */}
+          <div className="flex items-center bg-emerald-900/90 rounded-lg p-0.5 border border-emerald-700/80 text-xs font-semibold shrink-0" title={t.langSwitchTitle}>
+            <button
+              onClick={() => setLang("id")}
+              className={`px-2 py-0.5 rounded-md transition text-[11px] sm:text-xs ${
+                lang === "id"
+                  ? "bg-lime-400 text-emerald-950 shadow-xs font-bold"
+                  : "text-emerald-300 hover:text-white"
+              }`}
+            >
+              ID
+            </button>
+            <button
+              onClick={() => setLang("en")}
+              className={`px-2 py-0.5 rounded-md transition text-[11px] sm:text-xs ${
+                lang === "en"
+                  ? "bg-lime-400 text-emerald-950 shadow-xs font-bold"
+                  : "text-emerald-300 hover:text-white"
+              }`}
+            >
+              EN
+            </button>
+          </div>
+
+          <nav className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium">
+            {isSellerArea ? (
+              <>
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900 border border-emerald-700 text-lime-300 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-lime-400 animate-pulse"></span>
+                  {t.navSellerMode}
+                </div>
+                <Link
+                  href="/toko/berkah-mandiri?mode=seller_preview"
+                  target="_blank"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 transition text-emerald-100"
+                  title="Preview public storefront"
+                >
+                  <Eye className="w-3.5 h-3.5 text-lime-400" />
+                  <span className="hidden sm:inline">{t.navViewStore}</span>
+                </Link>
+              </>
+            ) : activeRole === "buyer" || isBuyerArea ? (
+              <>
+                <Link
+                  href="/toko/berkah-mandiri"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime-500 text-emerald-950 font-bold hover:bg-lime-400 shadow-sm transition"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>{t.navShopCatalog}</span>
+                </Link>
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900/90 border border-emerald-700 text-lime-300 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-lime-400"></span>
+                  {t.navBuyerSession}
+                </div>
+                <button
+                  onClick={handleExitBuyerSession}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-emerald-300/70 hover:text-red-200 hover:bg-red-950/60 transition text-xs border border-transparent hover:border-red-800"
+                  title={t.navExitSession}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">{t.navExitSession}</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/toko/berkah-mandiri"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/70 hover:bg-emerald-800 border border-emerald-700 transition"
+                >
+                  <ShoppingBag className="w-4 h-4 text-lime-400" />
+                  <span>{t.navBuyerCatalog}</span>
+                </Link>
+                <Link
+                  href="/seller"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime-500 text-emerald-950 font-bold hover:bg-lime-400 shadow-sm transition"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{t.navSellerDashboard}</span>
+                </Link>
+              </>
+            )}
+          </nav>
+        </div>
       </div>
     </header>
   );

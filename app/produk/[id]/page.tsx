@@ -23,6 +23,7 @@ import {
   Camera,
 } from "lucide-react";
 import { ProductQaResponse } from "@/lib/ai/types";
+import { useLanguage } from "@/lib/i18n";
 
 export default function ProductPassportPage({
   params,
@@ -31,6 +32,7 @@ export default function ProductPassportPage({
 }) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
+  const { t, isEn } = useLanguage();
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -191,7 +193,7 @@ export default function ProductPassportPage({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm">
-        Memuat paspor produk...
+        {isEn ? "Loading produce passport..." : "Memuat paspor produk..."}
       </div>
     );
   }
@@ -199,9 +201,11 @@ export default function ProductPassportPage({
   if (!product) {
     return (
       <div className="min-h-screen max-w-md mx-auto p-6 text-center space-y-4">
-        <h2 className="text-xl font-bold text-slate-800">Produk Tidak Ditemukan</h2>
+        <h2 className="text-xl font-bold text-slate-800">
+          {isEn ? "Product Not Found" : "Produk Tidak Ditemukan"}
+        </h2>
         <Link href="/toko/berkah-mandiri" className="text-emerald-700 text-sm font-semibold underline">
-          Kembali ke Katalog
+          {isEn ? "Back to Catalog" : "Kembali ke Katalog"}
         </Link>
       </div>
     );
@@ -217,7 +221,7 @@ export default function ProductPassportPage({
           href="/toko/berkah-mandiri"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:text-emerald-950 transition"
         >
-          <ArrowLeft className="w-4 h-4" /> Kembali ke Katalog
+          <ArrowLeft className="w-4 h-4" /> {isEn ? "Back to Catalog" : "Kembali ke Katalog"}
         </Link>
 
         {/* Passport Card */}
@@ -227,16 +231,16 @@ export default function ProductPassportPage({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-800/80 border border-emerald-700 text-xs text-lime-300 font-semibold mb-3">
-                  <ShieldCheck className="w-3.5 h-3.5 text-lime-400" /> Paspor Sayuran Transparan
+                  <ShieldCheck className="w-3.5 h-3.5 text-lime-400" /> {isEn ? "Transparent Produce Passport" : "Paspor Sayuran Transparan"}
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold">{product.name}</h1>
                 <p className="text-xs sm:text-sm text-emerald-100/80 mt-1">
-                  Kategori: {product.category} • Kode Paspor: {product.publicId}
+                  {isEn ? "Category: " : "Kategori: "}{product.category} • {isEn ? "Passport ID: " : "Kode Paspor: "}{product.publicId}
                 </p>
               </div>
 
               <div className="text-left sm:text-right bg-emerald-950/60 sm:bg-transparent p-3 sm:p-0 rounded-xl">
-                <div className="text-xs text-emerald-200">Harga Katalog</div>
+                <div className="text-xs text-emerald-200">{isEn ? "Catalog Price" : "Harga Katalog"}</div>
                 <div className="text-2xl font-black text-lime-400">
                   Rp {product.priceIdr.toLocaleString("id-ID")}
                   <span className="text-xs font-normal text-white"> / {product.saleUnit}</span>
@@ -250,49 +254,49 @@ export default function ProductPassportPage({
             <div className="md:col-span-2 space-y-6">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  Cerita & Catatan Produk
+                  {isEn ? "Produce Story & Notes" : "Cerita & Catatan Produk"}
                 </h3>
                 <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  {product.description || "Sayuran segar pilihan mitra petani lokal."}
+                  {product.description || (isEn ? "Fresh produce carefully selected from local farm partners." : "Sayuran segar pilihan mitra petani lokal.")}
                 </p>
               </div>
 
               {/* Provenance Checklist */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Transparansi Rantai Pasok
+                  {isEn ? "Supply Chain Transparency" : "Transparansi Rantai Pasok"}
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
                     <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Asal Kebun / Daerah:
+                      <MapPin className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Farm Origin / Region:" : "Asal Kebun / Daerah:"}
                     </span>
                     <span className="font-bold text-slate-900 block">
-                      {activeBatch?.origin || "Belum dicatat oleh penjual"}
+                      {activeBatch?.origin || (isEn ? "Not yet recorded by vendor" : "Belum dicatat oleh penjual")}
                     </span>
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
                     <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Tanggal Panen:
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Harvest Date:" : "Tanggal Panen:"}
                     </span>
                     <span className="font-bold text-slate-900 block">
                       {activeBatch?.harvestDate
-                        ? new Intl.DateTimeFormat("id-ID", { dateStyle: "long" }).format(
+                        ? new Intl.DateTimeFormat(isEn ? "en-US" : "id-ID", { dateStyle: "long" }).format(
                             new Date(activeBatch.harvestDate)
                           )
-                        : "Belum dicatat oleh pemasok"}
+                        : (isEn ? "Not recorded by supplier" : "Belum dicatat oleh pemasok")}
                     </span>
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
                     <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Waktu Diterima di Kios:
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Stall Intake Time:" : "Waktu Diterima di Kios:"}
                     </span>
                     <span className="font-bold text-slate-900 block">
                       {activeBatch?.receivedAt
-                        ? new Intl.DateTimeFormat("id-ID", {
+                        ? new Intl.DateTimeFormat(isEn ? "en-US" : "id-ID", {
                             dateStyle: "medium",
                             timeStyle: "short",
                           }).format(new Date(activeBatch.receivedAt))
@@ -302,10 +306,10 @@ export default function ProductPassportPage({
 
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
                     <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Stok Fisik Layak Jual:
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Sellable Physical Stock:" : "Stok Fisik Layak Jual:"}
                     </span>
                     <span className="font-bold text-emerald-700 block text-sm">
-                      {activeBatch?.salableQty || 0} {product.saleUnit} tersedia
+                      {activeBatch?.salableQty || 0} {product.saleUnit} {isEn ? "available" : "tersedia"}
                     </span>
                   </div>
                 </div>
@@ -315,7 +319,7 @@ export default function ProductPassportPage({
               {activeBatch?.claims && activeBatch.claims.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Klaim Kualitas & Sortasi
+                    {isEn ? "Quality Grading & Claims" : "Klaim Kualitas & Sortasi"}
                   </h3>
                   <div className="space-y-2">
                     {activeBatch.claims.map((c: any, idx: number) => (
@@ -460,7 +464,7 @@ export default function ProductPassportPage({
                   download={`qr-paspor-${product.publicId}.png`}
                   className="w-full py-2 px-3 rounded-xl bg-slate-900 text-white font-semibold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-800 transition shadow-sm"
                 >
-                  <Download className="w-3.5 h-3.5" /> Unduh QR Label Cetak
+                  <Download className="w-3.5 h-3.5" /> {isEn ? "Download Printable QR Label" : "Unduh QR Label Cetak"}
                 </a>
               )}
             </div>
@@ -475,34 +479,38 @@ export default function ProductPassportPage({
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900">
-                Tanya Asisten AI tentang {product.name}
+                {isEn ? `Ask AI Assistant about ${product.name}` : `Tanya Asisten AI tentang ${product.name}`}
               </h2>
               <p className="text-xs text-slate-500">
-                Jawaban hanya berdasarkan data riil toko & paspor terverifikasi (tanpa membocorkan modal)
+                {isEn
+                  ? "Answers verified from store data & produce provenance (without revealing confidential costs)"
+                  : "Jawaban hanya berdasarkan data riil toko & paspor terverifikasi (tanpa membocorkan modal)"}
               </p>
             </div>
           </div>
 
           {/* Quick chips */}
           <div className="flex flex-wrap gap-2 pt-1">
-            <span className="text-xs text-slate-400 self-center">Pertanyaan cepat:</span>
+            <span className="text-xs text-slate-400 self-center">
+              {isEn ? "Quick questions:" : "Pertanyaan cepat:"}
+            </span>
             <button
-              onClick={() => handleAskQuestion("Kapan sayuran ini dipanen?")}
+              onClick={() => handleAskQuestion(isEn ? "When was this produce harvested?" : "Kapan sayuran ini dipanen?")}
               className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
             >
-              Kapan dipanen?
+              {isEn ? "When harvested?" : "Kapan dipanen?"}
             </button>
             <button
-              onClick={() => handleAskQuestion("Berapa harganya kalau beli setengah kilo?")}
+              onClick={() => handleAskQuestion(isEn ? "How much for half a kilo?" : "Berapa harganya kalau beli setengah kilo?")}
               className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
             >
-              Berapa harga 1/2 kilo?
+              {isEn ? "Price for 1/2 kg?" : "Berapa harga 1/2 kilo?"}
             </button>
             <button
-              onClick={() => handleAskQuestion("Dari daerah mana sayuran ini berasal?")}
+              onClick={() => handleAskQuestion(isEn ? "Where is this produce from?" : "Dari daerah mana sayuran ini berasal?")}
               className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
             >
-              Dari mana asalnya?
+              {isEn ? "Where is it from?" : "Dari mana asalnya?"}
             </button>
           </div>
 
@@ -510,7 +518,7 @@ export default function ProductPassportPage({
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder={`Tanyakan hal lain tentang ${product.name}...`}
+              placeholder={isEn ? `Ask anything about ${product.name}...` : `Tanyakan hal lain tentang ${product.name}...`}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAskQuestion()}
@@ -522,7 +530,7 @@ export default function ProductPassportPage({
               className="px-4 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition"
             >
               <Send className="w-3.5 h-3.5" />
-              {qaLoading ? "Menjawab..." : "Tanya"}
+              {qaLoading ? (isEn ? "Answering..." : "Menjawab...") : (isEn ? "Ask AI" : "Tanya")}
             </button>
           </div>
 

@@ -64,8 +64,10 @@ import {
   Supplier,
 } from "@/lib/data/types";
 import { RestockRecommendation, VisualInspectionResponse } from "@/lib/ai/types";
+import { useLanguage } from "@/lib/i18n";
 
 export default function SellerDashboardPage() {
+  const { t, isEn } = useLanguage();
   const [activeTab, setActiveTab] = useState<
     "today" | "analytics" | "stock" | "intake" | "products" | "orders"
   >("today");
@@ -95,7 +97,7 @@ export default function SellerDashboardPage() {
   }, []);
 
   const handleExitBuyerSession = () => {
-    if (confirm("Apakah Anda ingin keluar dari sesi Pembeli untuk membuka otentikasi akun Penjual?")) {
+    if (confirm(t.navExitSessionConfirm)) {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("agripass_role");
         localStorage.removeItem("agripass_role");
@@ -115,7 +117,7 @@ export default function SellerDashboardPage() {
         sessionStorage.setItem("agripass_seller_auth", "true");
       }
     } else {
-      setPinError("PIN salah. Gunakan PIN demo: 1234");
+      setPinError(t.sellerLoginError);
     }
   };
 
@@ -637,26 +639,26 @@ export default function SellerDashboardPage() {
 
           <div className="space-y-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-black uppercase tracking-wider border border-red-300">
-              <Lock className="w-3.5 h-3.5" /> Proteksi Peran Terpisah Aktif
+              <Lock className="w-3.5 h-3.5" /> {isEn ? "Role Separation Active" : "Proteksi Peran Terpisah Aktif"}
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              Akses Akun Penjual Tidak Diizinkan
+              {t.sellerAccessBlockedTitle}
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
-              Perangkat ini terdeteksi sedang dalam <strong>Sesi Akses Toko Pembeli</strong>. Untuk menjaga keamanan dan kerahasiaan data operasional kios, akun pembeli dilarang membuka akun penjual.
+              {t.sellerAccessBlockedDesc}
             </p>
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-left space-y-2 text-xs">
             <div className="font-bold text-amber-900 flex items-center gap-1.5">
-              <span>🔒</span> Kebijakan Privasi & Keamanan AgriPass:
+              <span>🔒</span> {isEn ? "AgriPass Security & Privacy Policy:" : "Kebijakan Privasi & Keamanan AgriPass:"}
             </div>
             <ul className="list-disc pl-4 space-y-1.5 text-amber-800/90 text-[11px]">
               <li>
-                <strong>Kerahasiaan Harga Modal:</strong> Biaya kulakan petani/pasar induk dan margin keuntungan adalah rahasia dapur pedagang kios.
+                <strong>{t.sellerBlockedHppTitle}:</strong> {t.sellerBlockedHppDesc}
               </li>
               <li>
-                <strong>Integritas Audit Stok:</strong> Pembeli tidak diizinkan mengakses pencatatan susut sortasi atau manipulasi inventaris.
+                <strong>{t.sellerBlockedAuditTitle}:</strong> {t.sellerBlockedAuditDesc}
               </li>
             </ul>
           </div>
@@ -667,7 +669,7 @@ export default function SellerDashboardPage() {
               className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 hover:from-emerald-700 hover:to-lime-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/20 transition"
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>Kembali Belanja di Toko Sayur</span>
+              <span>{t.sellerBackToStoreBtn}</span>
             </Link>
 
             <button
@@ -675,7 +677,7 @@ export default function SellerDashboardPage() {
               onClick={handleExitBuyerSession}
               className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition border border-slate-200 flex items-center justify-center gap-1.5"
             >
-              <span>Keluar dari Sesi Pembeli (Ganti ke Akun Penjual)</span>
+              <span>{t.sellerExitBuyerBtn}</span>
             </button>
           </div>
         </div>
@@ -694,10 +696,10 @@ export default function SellerDashboardPage() {
 
           <div className="space-y-1.5">
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Area Operasional Penjual
+              {t.sellerLoginTitle}
             </h2>
             <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
-              Halaman ini memuat data rahasia pedagang (harga modal beli, susut sortasi, dan penerimaan pesanan). Masukkan PIN untuk membuka dashboard.
+              {t.sellerLoginDesc}
             </p>
           </div>
 
@@ -711,7 +713,7 @@ export default function SellerDashboardPage() {
                   setPinInput(e.target.value);
                   setPinError(null);
                 }}
-                placeholder="PIN Penjual (Demo: 1234)"
+                placeholder={t.sellerPinPlaceholder}
                 className="w-full text-center text-lg font-mono tracking-widest p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-slate-50 focus:bg-white transition"
                 autoFocus
               />
@@ -724,20 +726,20 @@ export default function SellerDashboardPage() {
               type="submit"
               className="w-full py-3 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-sm shadow-md transition"
             >
-              Buka Dashboard Operasional
+              {t.sellerLoginBtn}
             </button>
           </form>
 
           <div className="pt-2 border-t border-slate-100 flex flex-col gap-2 text-xs">
             <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-800 text-[11px] font-medium border border-emerald-100">
-              💡 <strong>Petunjuk Hackathon / Demo:</strong> Gunakan PIN demo <span className="font-mono font-bold text-emerald-950">1234</span>
+              💡 <strong>{isEn ? "Demo Hint:" : "Petunjuk Hackathon / Demo:"}</strong> {t.sellerDemoPinHint}
             </div>
 
             <Link
               href="/toko/berkah-mandiri"
               className="text-slate-500 hover:text-emerald-700 underline font-medium pt-1"
             >
-              Saya Pembeli &rarr; Kembali ke Katalog Belanja Sayur
+              {isEn ? "I'm a Customer → Return to Produce Catalog" : "Saya Pembeli → Kembali ke Katalog Belanja Sayur"}
             </Link>
           </div>
         </div>
@@ -752,19 +754,19 @@ export default function SellerDashboardPage() {
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-800 text-xs text-lime-300 font-medium mb-1.5">
-              Dashboard Operasional
+              {isEn ? "Operational Dashboard" : "Dashboard Operasional"}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black">Kios Sayur Berkah Mandiri</h1>
+            <h1 className="text-2xl sm:text-3xl font-black">{isEn ? "Berkah Mandiri Produce Stall" : "Kios Sayur Berkah Mandiri"}</h1>
             <p className="text-xs text-emerald-300/80 mt-1">
-              Pencatatan batch masuk, kalkulasi biaya pokok, reservasi stok & draf pesanan AI.
+              {isEn ? "Produce batch logging, unit cost calculation, stock reservation & AI draft orders." : "Pencatatan batch masuk, kalkulasi biaya pokok, reservasi stok & draf pesanan AI."}
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-2.5">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-900/90 text-[11px] font-semibold text-lime-300 border border-emerald-700/60 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-lime-400 animate-pulse" />
-                Database Anti-Hilang: Aktif ({dbInfo?.fileSizeKb ?? 34} KB)
+                {isEn ? "Crash-Proof DB: Active" : "Database Anti-Hilang: Aktif"} ({dbInfo?.fileSizeKb ?? 34} KB)
               </span>
               <span className="text-[11px] text-emerald-300/80">
-                Disk storage atomik • {dbInfo?.counts.stockMovements ?? stockMovements.length} mutasi tersimpan
+                {isEn ? `Atomic disk storage • ${dbInfo?.counts.stockMovements ?? stockMovements.length} records saved` : `Disk storage atomik • ${dbInfo?.counts.stockMovements ?? stockMovements.length} mutasi tersimpan`}
               </span>
             </div>
           </div>
@@ -773,9 +775,9 @@ export default function SellerDashboardPage() {
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-900/80 hover:bg-red-900/60 text-xs font-semibold text-emerald-200 hover:text-red-200 border border-emerald-700/60 transition"
-              title="Kunci dashboard operasional"
+              title={isEn ? "Lock operational dashboard" : "Kunci dashboard operasional"}
             >
-              <Lock className="w-3.5 h-3.5" /> Kunci
+              <Lock className="w-3.5 h-3.5" /> {isEn ? "Lock" : "Kunci"}
             </button>
             <button
               onClick={loadAllData}
@@ -788,7 +790,7 @@ export default function SellerDashboardPage() {
               target="_blank"
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-lime-400 text-emerald-950 text-xs font-bold hover:bg-lime-300 transition"
             >
-              <ExternalLink className="w-3.5 h-3.5" /> Buka Katalog Publik
+              <ExternalLink className="w-3.5 h-3.5" /> {isEn ? "Open Public Catalog" : "Buka Katalog Publik"}
             </Link>
           </div>
         </div>
@@ -806,7 +808,7 @@ export default function SellerDashboardPage() {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            Hari Ini
+            {isEn ? "Today" : "Hari Ini"}
             {submittedOrdersCount > 0 && (
               <span className="w-5 h-5 rounded-full bg-lime-500 text-emerald-950 text-[10px] font-black flex items-center justify-center">
                 {submittedOrdersCount}
@@ -823,7 +825,7 @@ export default function SellerDashboardPage() {
             }`}
           >
             <TrendingUp className="w-4 h-4 text-emerald-700" />
-            Analitik & Margin
+            {isEn ? "Analytics & Margin" : "Analitik & Margin"}
             {analyticsData && (
               <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 text-[10px] font-black">
                 {analyticsData.averageGrossMarginPercent}%
@@ -840,7 +842,7 @@ export default function SellerDashboardPage() {
             }`}
           >
             <Boxes className="w-4 h-4" />
-            Manajemen Stok
+            {isEn ? "Inventory Management" : "Manajemen Stok"}
             {((stockOverview?.outOfStockCount || 0) + (stockOverview?.lowStockCount || 0)) > 0 && (
               <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-black flex items-center justify-center">
                 {(stockOverview?.outOfStockCount || 0) + (stockOverview?.lowStockCount || 0)}
@@ -857,7 +859,7 @@ export default function SellerDashboardPage() {
             }`}
           >
             <PackagePlus className="w-4 h-4" />
-            Barang Masuk & Biaya
+            {isEn ? "Intake & Costs" : "Barang Masuk & Biaya"}
           </button>
 
           <button
@@ -869,7 +871,7 @@ export default function SellerDashboardPage() {
             }`}
           >
             <ShoppingBag className="w-4 h-4" />
-            Kelola Pesanan ({orders.length})
+            {isEn ? `Manage Orders (${orders.length})` : `Kelola Pesanan (${orders.length})`}
           </button>
 
           <button
@@ -881,7 +883,7 @@ export default function SellerDashboardPage() {
             }`}
           >
             <QrCode className="w-4 h-4" />
-            Katalog & Paspor QR ({products.length})
+            {isEn ? `Catalog & QR (${products.length})` : `Katalog & Paspor QR (${products.length})`}
           </button>
         </div>
       </div>

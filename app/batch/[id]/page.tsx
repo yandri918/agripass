@@ -17,6 +17,8 @@ import {
   Settings,
 } from "lucide-react";
 
+import { useLanguage } from "@/lib/i18n";
+
 export default function BatchPassportPage({
   params,
 }: {
@@ -24,6 +26,7 @@ export default function BatchPassportPage({
 }) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
+  const { t, isEn } = useLanguage();
 
   const [batchData, setBatchData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -150,7 +153,7 @@ export default function BatchPassportPage({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm">
-        Memuat paspor batch...
+        {isEn ? "Loading batch passport..." : "Memuat paspor batch..."}
       </div>
     );
   }
@@ -158,9 +161,11 @@ export default function BatchPassportPage({
   if (!batchData) {
     return (
       <div className="min-h-screen max-w-md mx-auto p-6 text-center space-y-4">
-        <h2 className="text-xl font-bold text-slate-800">Batch Tidak Ditemukan</h2>
+        <h2 className="text-xl font-bold text-slate-800">
+          {isEn ? "Batch Not Found" : "Batch Tidak Ditemukan"}
+        </h2>
         <Link href="/toko/berkah-mandiri" className="text-emerald-700 text-sm font-semibold underline">
-          Kembali ke Katalog
+          {isEn ? "Back to Catalog" : "Kembali ke Katalog"}
         </Link>
       </div>
     );
@@ -173,46 +178,46 @@ export default function BatchPassportPage({
           href={`/produk/${batchData.productPublicId}`}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:text-emerald-950 transition"
         >
-          <ArrowLeft className="w-4 h-4" /> Paspor Produk Utama ({batchData.productName})
+          <ArrowLeft className="w-4 h-4" /> {isEn ? `Main Product Passport (${batchData.productName})` : `Paspor Produk Utama (${batchData.productName})`}
         </Link>
 
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="bg-emerald-950 text-white p-6 sm:p-8">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-800 border border-emerald-700 text-xs text-lime-300 font-semibold mb-3">
-              <ShieldCheck className="w-3.5 h-3.5 text-lime-400" /> Paspor Batch Spesifik
+              <ShieldCheck className="w-3.5 h-3.5 text-lime-400" /> {isEn ? "Specific Batch Passport" : "Paspor Batch Spesifik"}
             </div>
             <h1 className="text-2xl font-black">{batchData.productName}</h1>
-            <p className="text-xs text-emerald-300 font-mono mt-1">ID Batch: {batchData.publicId}</p>
+            <p className="text-xs text-emerald-300 font-mono mt-1">{isEn ? "Batch ID: " : "ID Batch: "}{batchData.publicId}</p>
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-slate-400 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Asal Panen:
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Harvest Origin:" : "Asal Panen:"}
                 </span>
                 <span className="font-bold text-slate-900 block">{batchData.origin || "-"}</span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Tanggal Panen:
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Harvest Date:" : "Tanggal Panen:"}
                 </span>
                 <span className="font-bold text-slate-900 block">
                   {batchData.harvestDate
-                    ? new Intl.DateTimeFormat("id-ID", { dateStyle: "long" }).format(
+                    ? new Intl.DateTimeFormat(isEn ? "en-US" : "id-ID", { dateStyle: "long" }).format(
                         new Date(batchData.harvestDate)
                       )
-                    : "Belum dicatat"}
+                    : (isEn ? "Not recorded" : "Belum dicatat")}
                 </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Penerimaan di Kios:
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Stall Intake:" : "Penerimaan di Kios:"}
                 </span>
                 <span className="font-bold text-slate-900 block">
-                  {new Intl.DateTimeFormat("id-ID", {
+                  {new Intl.DateTimeFormat(isEn ? "en-US" : "id-ID", {
                     dateStyle: "medium",
                     timeStyle: "short",
                   }).format(new Date(batchData.receivedAt))}
@@ -221,7 +226,7 @@ export default function BatchPassportPage({
 
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="text-slate-400 flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Sisa Stok Layak Jual:
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> {isEn ? "Sellable Stock Remaining:" : "Sisa Stok Layak Jual:"}
                 </span>
                 <span className="font-bold text-emerald-700 block">
                   {batchData.salableQty} {batchData.saleUnit} ({batchData.status})
@@ -232,7 +237,7 @@ export default function BatchPassportPage({
             {batchData.claims && batchData.claims.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Klaim Terverifikasi
+                  {isEn ? "Verified Claims" : "Klaim Terverifikasi"}
                 </h3>
                 {batchData.claims.map((c: any, idx: number) => (
                   <div
@@ -334,7 +339,7 @@ export default function BatchPassportPage({
                   download={`qr-batch-${batchData.publicId}.png`}
                   className="py-2 px-4 rounded-xl bg-slate-900 text-white font-semibold text-xs flex items-center gap-1.5 hover:bg-slate-800 transition"
                 >
-                  <Download className="w-3.5 h-3.5" /> Unduh QR Label Batch
+                  <Download className="w-3.5 h-3.5" /> {isEn ? "Download Batch QR Label" : "Unduh QR Label Batch"}
                 </a>
               )}
             </div>
