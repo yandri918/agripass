@@ -49,6 +49,18 @@ export default function ProductPassportPage({
   const [qaLoading, setQaLoading] = useState(false);
   const [qaResult, setQaResult] = useState<ProductQaResponse | null>(null);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isSellerPreview = urlParams.get("mode") === "seller_preview";
+      if (!isSellerPreview) {
+        sessionStorage.setItem("agripass_role", "buyer");
+        localStorage.setItem("agripass_role", "buyer");
+        sessionStorage.removeItem("agripass_seller_auth");
+      }
+    }
+  }, []);
+
   // 1. Ambil data produk, IP lokal, dan domain tersimpan
   useEffect(() => {
     async function loadData() {

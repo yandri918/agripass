@@ -70,21 +70,41 @@ export default function SellerDashboardPage() {
     "today" | "analytics" | "stock" | "intake" | "products" | "orders"
   >("today");
 
-  // Seller Authentication Gate (PIN)
+  // Seller Authentication Gate (PIN) & Role Protection
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
+  const [isBuyerSession, setIsBuyerSession] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const auth = sessionStorage.getItem("agripass_seller_auth");
-      if (auth === "true") {
-        setIsAuthenticated(true);
+      const role = sessionStorage.getItem("agripass_role") || localStorage.getItem("agripass_role");
+      if (role === "buyer") {
+        setIsBuyerSession(true);
+        setIsAuthenticated(false);
+        sessionStorage.removeItem("agripass_seller_auth");
+      } else {
+        const auth = sessionStorage.getItem("agripass_seller_auth");
+        if (auth === "true") {
+          setIsAuthenticated(true);
+        }
       }
     }
     setCheckingAuth(false);
   }, []);
+
+  const handleExitBuyerSession = () => {
+    if (confirm("Apakah Anda ingin keluar dari sesi Pembeli untuk membuka otentikasi akun Penjual?")) {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("agripass_role");
+        localStorage.removeItem("agripass_role");
+        sessionStorage.removeItem("agripass_seller_auth");
+      }
+      setIsBuyerSession(false);
+      setIsAuthenticated(false);
+    }
+  };
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -606,6 +626,64 @@ export default function SellerDashboardPage() {
     );
   }
 
+  // 1. BLOKIR AKSES TOTAL JIKA PENGGUNA BERADA DALAM SESI TOKO PEMBELI
+  if (isBuyerSession) {
+    return (
+      <div className="min-h-[85vh] flex items-center justify-center p-4 bg-slate-100">
+        <div className="bg-white rounded-3xl border-2 border-red-200 shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6 text-center">
+          <div className="w-20 h-20 rounded-3xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner border border-red-200">
+            <Lock className="w-10 h-10 animate-pulse text-red-600" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-black uppercase tracking-wider border border-red-300">
+              <Lock className="w-3.5 h-3.5" /> Proteksi Peran Terpisah Aktif
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Akses Akun Penjual Tidak Diizinkan
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+              Perangkat ini terdeteksi sedang dalam <strong>Sesi Akses Toko Pembeli</strong>. Untuk menjaga keamanan dan kerahasiaan data operasional kios, akun pembeli dilarang membuka akun penjual.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-left space-y-2 text-xs">
+            <div className="font-bold text-amber-900 flex items-center gap-1.5">
+              <span>🔒</span> Kebijakan Privasi & Keamanan AgriPass:
+            </div>
+            <ul className="list-disc pl-4 space-y-1.5 text-amber-800/90 text-[11px]">
+              <li>
+                <strong>Kerahasiaan Harga Modal:</strong> Biaya kulakan petani/pasar induk dan margin keuntungan adalah rahasia dapur pedagang kios.
+              </li>
+              <li>
+                <strong>Integritas Audit Stok:</strong> Pembeli tidak diizinkan mengakses pencatatan susut sortasi atau manipulasi inventaris.
+              </li>
+            </ul>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <Link
+              href="/toko/berkah-mandiri"
+              className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 hover:from-emerald-700 hover:to-lime-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/20 transition"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Kembali Belanja di Toko Sayur</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleExitBuyerSession}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition border border-slate-200 flex items-center justify-center gap-1.5"
+            >
+              <span>Keluar dari Sesi Pembeli (Ganti ke Akun Penjual)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. OTENTIKASI PIN JIKA BUKAN PEMBELI TAPI BELUM LOGIN
   if (!isAuthenticated) {
     return (
       <div className="min-h-[85vh] flex items-center justify-center p-4 bg-slate-50">
@@ -706,7 +784,7 @@ export default function SellerDashboardPage() {
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </button>
             <Link
-              href="/toko/berkah-mandiri"
+              href="/toko/berkah-mandiri?mode=seller_preview"
               target="_blank"
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-lime-400 text-emerald-950 text-xs font-bold hover:bg-lime-300 transition"
             >

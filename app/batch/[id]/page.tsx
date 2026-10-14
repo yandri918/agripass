@@ -38,6 +38,18 @@ export default function BatchPassportPage({
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isSellerPreview = urlParams.get("mode") === "seller_preview";
+      if (!isSellerPreview) {
+        sessionStorage.setItem("agripass_role", "buyer");
+        localStorage.setItem("agripass_role", "buyer");
+        sessionStorage.removeItem("agripass_seller_auth");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     async function loadData() {
       try {
         const [batchRes, ipRes] = await Promise.all([

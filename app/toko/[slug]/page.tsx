@@ -53,6 +53,18 @@ export default function ShopCatalogPage({
   const [orderSuccess, setOrderSuccess] = useState<any>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isSellerPreview = urlParams.get("mode") === "seller_preview";
+      if (!isSellerPreview) {
+        sessionStorage.setItem("agripass_role", "buyer");
+        localStorage.setItem("agripass_role", "buyer");
+        sessionStorage.removeItem("agripass_seller_auth");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     async function loadCatalog() {
       try {
         const res = await fetch(`/api/public/shops/${slug}/products`);
