@@ -900,7 +900,7 @@ export default function SellerDashboardPage() {
                 <div className="text-2xl font-black text-emerald-800 mt-1">
                   {submittedOrdersCount}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1">Perlu ditinjau & dicadangkan</div>
+                <div className="text-[11px] text-slate-500 mt-1">Perlu ditinjau &amp; dicadangkan</div>
               </div>
 
               <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
@@ -1173,7 +1173,7 @@ export default function SellerDashboardPage() {
                       <Boxes className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 text-sm">Valuasi & Proyeksi Sisa Stok di Kios</h3>
+                      <h3 className="font-bold text-slate-900 text-sm">Valuasi &amp; Proyeksi Sisa Stok di Kios</h3>
                       <p className="text-[11px] text-slate-500">Nilai modal aset dan potensi keuntungan dari stok sayur saat ini</p>
                     </div>
                   </div>
@@ -1217,7 +1217,7 @@ export default function SellerDashboardPage() {
                       <TrendingDown className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 text-sm">Kerugian Finansial Susut & Sortasi (Waste)</h3>
+                      <h3 className="font-bold text-slate-900 text-sm">Kerugian Finansial Susut &amp; Sortasi (Waste)</h3>
                       <p className="text-[11px] text-slate-500">Nilai modal barang yang hilang akibat sortasi subuh dan kelayuan daun</p>
                     </div>
                   </div>
@@ -1240,7 +1240,7 @@ export default function SellerDashboardPage() {
                     <span className="font-black text-slate-800 text-sm sm:text-base block mt-0.5">
                       {analyticsData?.totalSpoilageQty || 0} <span className="text-xs font-normal text-slate-500">kg/ikat</span>
                     </span>
-                    <span className="text-[9px] text-slate-500 block mt-0.5">Daun busuk, akar tanah, & sortasi awal</span>
+                    <span className="text-[9px] text-slate-500 block mt-0.5">Daun busuk, akar tanah, &amp; sortasi awal</span>
                   </div>
                 </div>
               </div>
@@ -1304,7 +1304,7 @@ export default function SellerDashboardPage() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-4">Peringkat & Sayuran</th>
+                      <th className="py-3 px-4">Peringkat &amp; Sayuran</th>
                       <th className="py-3 px-3">Rotasi</th>
                       <th className="py-3 px-3 text-right">Terjual</th>
                       <th className="py-3 px-3 text-right">Omset (Rp)</th>
@@ -1773,7 +1773,7 @@ export default function SellerDashboardPage() {
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-800 text-[11px] text-lime-300 font-bold mb-1.5">
                   <Sparkles className="w-3 h-3" /> Asisten Pintar Kios Sayur
                 </div>
-                <h3 className="font-black text-lg">Pusat Kontrol & Rotasi Stok Sayuran</h3>
+                <h3 className="font-black text-lg">Pusat Kontrol &amp; Rotasi Stok Sayuran</h3>
                 <p className="text-xs text-emerald-200/80 mt-0.5 max-w-xl">
                   Pantau stok fisik real-time, audit rotasi FIFO untuk mencegah kelayuan daun, dan catat susut timbangan harian dalam 1 kali klik.
                 </p>
@@ -1821,7 +1821,7 @@ export default function SellerDashboardPage() {
                 }`}
               >
                 <History className="w-3.5 h-3.5" />
-                <span>Kartu Stok & Audit Mutasi ({stockMovements.length})</span>
+                <span>Kartu Stok &amp; Audit Mutasi ({stockMovements.length})</span>
               </button>
             </div>
 
@@ -1849,9 +1849,9 @@ export default function SellerDashboardPage() {
                     >
                       <option value="ALL">Semua Kategori</option>
                       <option value="Sayuran Daun">Sayuran Daun</option>
-                      <option value="Buah & Tomat">Buah & Tomat</option>
+                      <option value="Buah & Tomat">Buah &amp; Tomat</option>
                       <option value="Cabai">Cabai</option>
-                      <option value="Bumbu & Umbi">Bumbu & Umbi</option>
+                      <option value="Bumbu & Umbi">Bumbu &amp; Umbi</option>
                       <option value="Polong">Polong</option>
                     </select>
 
@@ -1878,7 +1878,7 @@ export default function SellerDashboardPage() {
                         <th className="pb-3 text-right">Dicadangkan</th>
                         <th className="pb-3 text-right">Tersedia</th>
                         <th className="pb-3 text-center">Status</th>
-                        <th className="pb-3">Batch & FIFO</th>
+                        <th className="pb-3">Batch &amp; FIFO</th>
                         <th className="pb-3 text-right">Nilai Modal</th>
                         <th className="pb-3 pr-2 text-right">Aksi Cepat</th>
                       </tr>
@@ -2108,7 +2108,7 @@ export default function SellerDashboardPage() {
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-400 font-semibold">
                         <th className="pb-3 pl-2">Waktu</th>
-                        <th className="pb-3">Komoditas & Batch</th>
+                        <th className="pb-3">Komoditas &amp; Batch</th>
                         <th className="pb-3">Tipe Mutasi</th>
                         <th className="pb-3 text-right">Perubahan Qty</th>
                         <th className="pb-3 pl-4">Alasan / Catatan</th>
@@ -2262,7 +2262,7 @@ export default function SellerDashboardPage() {
                       <div className="absolute inset-0 bg-emerald-950/70 backdrop-blur-xs flex flex-col items-center justify-center text-white text-center p-3 space-y-1.5 animate-pulse">
                         <Sparkles className="w-5 h-5 text-lime-400 animate-spin" />
                         <span className="font-bold text-xs">Menganalisis Visual Sayur...</span>
-                        <span className="text-[10px] text-emerald-200">Menghitung kesegaran daun & susut sortasi</span>
+                        <span className="text-[10px] text-emerald-200">Menghitung kesegaran daun &amp; susut sortasi</span>
                       </div>
                     )}
                   </div>
@@ -2461,7 +2461,7 @@ export default function SellerDashboardPage() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">Produk & Batch</th>
+                      <th className="p-2.5">Produk &amp; Batch</th>
                       <th className="p-2.5">Kesegaran AI</th>
                       <th className="p-2.5">Diterima / Rusak</th>
                       <th className="p-2.5">Layak Jual</th>
@@ -2660,7 +2660,7 @@ export default function SellerDashboardPage() {
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Katalog Produk & Paspor QR Kios</h3>
+                <h3 className="font-bold text-slate-900 text-sm">Katalog Produk &amp; Paspor QR Kios</h3>
                 <p className="text-xs text-slate-500">
                   Cetak label QR untuk ditempel di keranjang atau kemasan sayur
                 </p>
@@ -2803,7 +2803,7 @@ export default function SellerDashboardPage() {
               <div>
                 <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                   <Scale className="w-5 h-5 text-emerald-800" />
-                  <span>Penyesuaian Stok & Catat Susut</span>
+                  <span>Penyesuaian Stok &amp; Catat Susut</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Catat sayuran layu, selisih timbangan display, atau opname fisik.

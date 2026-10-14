@@ -316,6 +316,10 @@ Hanya kembalikan JSON tanpa markdown code block.`;
   return null;
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Parser Lokal Berbasis Aturan untuk Ekstraksi Pesanan Bahasa Indonesia (Fallback)
  */
@@ -379,7 +383,9 @@ function parseOrderTextLocally(
     for (const term of searchTerms) {
       if ((term === "cabai" || term === "cabe") && hasGenericCabai) continue;
 
-      const regex = new RegExp(`\\b${term}\\b`, "i");
+      const safeTerm = escapeRegex(term);
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+      const regex = new RegExp(`\\b${safeTerm}\\b`, "i");
       if (regex.test(lowerMsg)) {
         matchedTerm = term;
         break;
@@ -394,12 +400,15 @@ function parseOrderTextLocally(
     let needsClarification = false;
     let note: string | null = null;
 
+    const safeMatched = escapeRegex(matchedTerm);
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
     const patternA = new RegExp(
-      `(\\d+(?:[,.]\\d+)?|setengah|1\\/2)\\s*(kg|kilo|gram|gr|ikat|pack|biji|buah)?\\s*${matchedTerm}`,
+      `(\\d+(?:[,.]\\d+)?|setengah|1\\/2)\\s*(kg|kilo|gram|gr|ikat|pack|biji|buah)?\\s*${safeMatched}`,
       "i"
     );
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
     const patternB = new RegExp(
-      `${matchedTerm}\\s*(?:nya)?\\s*(\\d+(?:[,.]\\d+)?|setengah|1\\/2)\\s*(kg|kilo|gram|gr|ikat|pack|biji|buah)?`,
+      `${safeMatched}\\s*(?:nya)?\\s*(\\d+(?:[,.]\\d+)?|setengah|1\\/2)\\s*(kg|kilo|gram|gr|ikat|pack|biji|buah)?`,
       "i"
     );
 
@@ -434,7 +443,8 @@ function parseOrderTextLocally(
         questions.push(`Berapa ikat ${prod.name} yang Anda butuhkan? (Produk dijual per ikat).`);
       }
     } else {
-      const budgetPattern = new RegExp(`${matchedTerm}\\s*(?:nya)?\\s*(\\d+)\\s*(?:rb|ribu|k)?`, "i");
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+      const budgetPattern = new RegExp(`${safeMatched}\\s*(?:nya)?\\s*(\\d+)\\s*(?:rb|ribu|k)?`, "i");
       const bMatch = lowerMsg.match(budgetPattern);
       if (bMatch) {
         const val = parseInt(bMatch[1], 10);
