@@ -49,6 +49,8 @@ import {
   Store,
   Truck,
   Printer,
+  Pencil,
+  Edit3,
 } from "lucide-react";
 import {
   Batch,
@@ -169,6 +171,11 @@ export default function SellerDashboardPage() {
 
   // Intake Form State
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [isCustomCommodity, setIsCustomCommodity] = useState(false);
+  const [customCommodityName, setCustomCommodityName] = useState("");
+  const [customSaleUnit, setCustomSaleUnit] = useState("kg");
+  const [customCategory, setCustomCategory] = useState("Sayuran Daun");
+  const [customRetailPrice, setCustomRetailPrice] = useState<number>(12000);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [receivedQty, setReceivedQty] = useState<number>(10);
   const [initialDamageQty, setInitialDamageQty] = useState<number>(0.5);
@@ -178,6 +185,16 @@ export default function SellerDashboardPage() {
   const [harvestDate, setHarvestDate] = useState("");
   const [claimText, setClaimText] = useState("");
   const [submittingIntake, setSubmittingIntake] = useState(false);
+
+  // Product Catalog Modal State (Add & Edit)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+  const [productFormName, setProductFormName] = useState("");
+  const [productFormCategory, setProductFormCategory] = useState("Sayuran Daun");
+  const [productFormUnit, setProductFormUnit] = useState("kg");
+  const [productFormPrice, setProductFormPrice] = useState<number>(12000);
+  const [productFormAliases, setProductFormAliases] = useState("");
+  const [submittingProductForm, setSubmittingProductForm] = useState(false);
 
   // Visual Inspection AI State (Gemini Vision Multimodal)
   const [inspectionImage, setInspectionImage] = useState<string | null>(null);
@@ -415,6 +432,7 @@ export default function SellerDashboardPage() {
 
   // Live Unit Cost Calculation (Blueprint Section 10.1)
   const currentProduct = products.find((p) => p.id === selectedProductId);
+  const activeSaleUnit = isCustomCommodity ? customSaleUnit : (currentProduct?.saleUnit || "unit");
   const liveSalableQty = Math.max(0, receivedQty - initialDamageQty);
   const liveTotalBatchCost = purchaseCost + freightCost;
   const liveUnitCost =
@@ -439,13 +457,16 @@ export default function SellerDashboardPage() {
   const runVisualInspection = async (imageDataUrl: string, mimeType: string = "image/jpeg") => {
     setInspecting(true);
     try {
+      const commodityName = isCustomCommodity
+        ? customCommodityName.trim() || "Sayuran Segar"
+        : currentProduct?.name || "Sayuran";
       const res = await fetch("/api/ai/inspect-produce", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: imageDataUrl,
           mimeType,
-          productName: currentProduct?.name,
+          productName: commodityName,
           receivedQty,
         }),
       });
@@ -475,30 +496,47 @@ export default function SellerDashboardPage() {
   // Handle Intake Submit
   const handleIntakeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProductId || receivedQty <= 0) {
-      alert("Mohon pilih produk dan kuantitas yang valid.");
-      return;
+    if (isCustomCommodity) {
+      if (!customCommodityName.trim() || receivedQty <= 0) {
+        alert("Mohon ketik nama komoditas sayuran dan kuantitas yang valid.");
+        return;
+      }
+    } else {
+      if (!selectedProductId || receivedQty <= 0) {
+        alert("Mohon pilih produk dan kuantitas yang valid.");
+        return;
+      }
     }
 
     setSubmittingIntake(true);
     try {
+      const payload: any = {
+        supplierId: selectedSupplierId || undefined,
+        receivedQty,
+        initialDamageQty,
+        purchaseCost,
+        freightCost,
+        origin: origin || undefined,
+        harvestDate: harvestDate || null,
+        claimText: claimText || undefined,
+        freshnessScore: inspectionResult?.freshnessScore,
+        freshnessGrade: inspectionResult?.freshnessGrade,
+        inspectionPhoto: inspectionImage || undefined,
+      };
+
+      if (isCustomCommodity) {
+        payload.commodityName = customCommodityName.trim();
+        payload.saleUnit = customSaleUnit;
+        payload.category = customCategory;
+        payload.retailPriceIdr = customRetailPrice;
+      } else {
+        payload.productId = selectedProductId;
+      }
+
       const res = await fetch("/api/seller/batches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId: selectedProductId,
-          supplierId: selectedSupplierId || undefined,
-          receivedQty,
-          initialDamageQty,
-          purchaseCost,
-          freightCost,
-          origin: origin || undefined,
-          harvestDate: harvestDate || null,
-          claimText: claimText || undefined,
-          freshnessScore: inspectionResult?.freshnessScore,
-          freshnessGrade: inspectionResult?.freshnessGrade,
-          inspectionPhoto: inspectionImage || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -512,14 +550,59 @@ export default function SellerDashboardPage() {
         setInspectionImage(null);
         setInspectionResult(null);
         setInspectionApplied(false);
+        if (isCustomCommodity) {
+          setIsCustomCommodity(false);
+          setCustomCommodityName("");
+        }
       } else {
         const err = await res.json();
         alert(err.error || "Gagal mencatat barang masuk");
       }
     } catch (err) {
       console.error("Gagal submit intake:", err);
+      alert("Terjadi kesalahan jaringan.");
     } finally {
       setSubmittingIntake(false);
+    }
+  };
+
+  // Handle Save or Update Product (Tab 4 & Editable Commodity)
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!productFormName.trim()) {
+      alert("Nama komoditi sayuran wajib diisi");
+      return;
+    }
+    setSubmittingProductForm(true);
+    try {
+      const res = await fetch("/api/seller/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingProduct?.id || undefined,
+          name: productFormName.trim(),
+          category: productFormCategory,
+          saleUnit: productFormUnit,
+          priceIdr: productFormPrice,
+          aliases: productFormAliases || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        loadAllData();
+        setEditingProduct(null);
+        setIsAddProductModalOpen(false);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Gagal menyimpan komoditas");
+      }
+    } catch (err) {
+      console.error("Gagal simpan komoditas:", err);
+      alert("Terjadi kesalahan jaringan.");
+    } finally {
+      setSubmittingProductForm(false);
     }
   };
 
@@ -2320,25 +2403,157 @@ export default function SellerDashboardPage() {
               </div>
 
               <form onSubmit={handleIntakeSubmit} className="space-y-3 text-xs">
-                <div>
-                  <label className="text-slate-600 block mb-1 font-semibold">Pilih Komoditas Produk *</label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="w-full p-2 rounded-lg border border-slate-200 bg-white focus:outline-none"
-                  >
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.saleUnit})
+                {/* Pilihan Komoditas: Dropdown atau Input Teks Editable */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-700 font-bold flex items-center gap-1.5">
+                      <span>Komoditas Sayuran *</span>
+                      {isCustomCommodity && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold animate-pulse border border-emerald-200">
+                          Mode Ketik Bebas / Baru
+                        </span>
+                      )}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomCommodity(!isCustomCommodity);
+                        if (!isCustomCommodity && !customCommodityName && currentProduct) {
+                          setCustomCommodityName(currentProduct.name);
+                          setCustomSaleUnit(currentProduct.saleUnit);
+                          setCustomCategory(currentProduct.category);
+                          setCustomRetailPrice(currentProduct.priceIdr);
+                        }
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 underline decoration-dotted transition"
+                    >
+                      {isCustomCommodity ? (
+                        <>
+                          <Boxes className="w-3 h-3" />
+                          <span>Pilih dari Katalog</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit3 className="w-3 h-3" />
+                          <span>+ Ketik Komoditi Bebas</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {!isCustomCommodity ? (
+                    <select
+                      value={selectedProductId}
+                      onChange={(e) => {
+                        if (e.target.value === "__NEW_CUSTOM__") {
+                          setIsCustomCommodity(true);
+                          setCustomCommodityName("");
+                        } else {
+                          setSelectedProductId(e.target.value);
+                        }
+                      }}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none focus:border-emerald-600 transition"
+                    >
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.saleUnit}) • Rp {p.priceIdr.toLocaleString("id-ID")}/{p.saleUnit}
+                        </option>
+                      ))}
+                      <option value="__NEW_CUSTOM__" className="text-emerald-700 font-bold">
+                        ➕ + Ketik Komoditi Sayuran Baru Sendiri...
                       </option>
-                    ))}
-                  </select>
+                    </select>
+                  ) : (
+                    <div className="space-y-2.5 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/90">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-bold text-slate-700">
+                            Nama Komoditi Sayuran (Ketik / Edit Bebas):
+                          </label>
+                          <span className="text-[10px] text-emerald-700 font-medium">Bisa sayur baru apa saja</span>
+                        </div>
+                        <input
+                          type="text"
+                          list="indonesian-vegetable-suggestions"
+                          value={customCommodityName}
+                          onChange={(e) => setCustomCommodityName(e.target.value)}
+                          placeholder="Ketik: Kangkung, Sawi Putih, Wortel, Terong, Buncis..."
+                          className="w-full p-2 text-xs rounded-lg border border-emerald-300 focus:outline-none focus:border-emerald-600 bg-white font-bold text-slate-900"
+                          required
+                        />
+                        <datalist id="indonesian-vegetable-suggestions">
+                          <option value="Kangkung Air" />
+                          <option value="Kangkung Cabut" />
+                          <option value="Sawi Putih / Petsai" />
+                          <option value="Sawi Hijau / Caisim" />
+                          <option value="Wortel Brastagi" />
+                          <option value="Terong Ungu" />
+                          <option value="Labu Siam" />
+                          <option value="Kacang Panjang" />
+                          <option value="Buncis Super" />
+                          <option value="Brokoli Segar" />
+                          <option value="Kembang Kol" />
+                          <option value="Daun Bawang" />
+                          <option value="Seledri" />
+                          <option value="Timun Lalap" />
+                          <option value="Pare / Peria" />
+                          <option value="Jagung Manis" />
+                          <option value="Tauge Pendek / Panjang" />
+                          <option value="Kol / Kubis Segar" />
+                          <option value="Kentang Dieng" />
+                        </datalist>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Satuan Jual:</label>
+                          <select
+                            value={customSaleUnit}
+                            onChange={(e) => setCustomSaleUnit(e.target.value)}
+                            className="w-full p-1.5 text-xs rounded-lg border border-slate-200 bg-white"
+                          >
+                            <option value="kg">kg (Kilo)</option>
+                            <option value="ikat">ikat</option>
+                            <option value="pack">pack</option>
+                            <option value="buah">buah</option>
+                            <option value="biji">biji</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Kategori:</label>
+                          <select
+                            value={customCategory}
+                            onChange={(e) => setCustomCategory(e.target.value)}
+                            className="w-full p-1.5 text-xs rounded-lg border border-slate-200 bg-white"
+                          >
+                            <option value="Sayuran Daun">Sayuran Daun</option>
+                            <option value="Cabai">Cabai</option>
+                            <option value="Buah &amp; Tomat">Buah &amp; Tomat</option>
+                            <option value="Bumbu &amp; Umbi">Bumbu &amp; Umbi</option>
+                            <option value="Polong">Polong</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Harga Jual Ritel (Rp):</label>
+                          <input
+                            type="number"
+                            value={customRetailPrice}
+                            onChange={(e) => setCustomRetailPrice(parseInt(e.target.value) || 0)}
+                            className="w-full p-1.5 text-xs rounded-lg border border-slate-200 bg-white font-bold text-slate-800"
+                            placeholder="12000"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-slate-600 block mb-1 font-semibold">
-                      Jumlah Diterima ({currentProduct?.saleUnit || "unit"}) *
+                      Jumlah Diterima ({activeSaleUnit}) *
                     </label>
                     <input
                       type="number"
@@ -2352,7 +2567,7 @@ export default function SellerDashboardPage() {
 
                   <div>
                     <label className="text-slate-600 block mb-1 font-semibold">
-                      Rusak Awal Sortasi ({currentProduct?.saleUnit || "unit"})
+                      Rusak Awal Sortasi ({activeSaleUnit})
                     </label>
                     <input
                       type="number"
@@ -2658,13 +2873,29 @@ export default function SellerDashboardPage() {
         {/* TAB 4: KATALOG & PASPOR QR */}
         {activeTab === "products" && (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">Katalog Produk &amp; Paspor QR Kios</h3>
                 <p className="text-xs text-slate-500">
                   Cetak label QR untuk ditempel di keranjang atau kemasan sayur
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingProduct(null);
+                  setProductFormName("");
+                  setProductFormCategory("Sayuran Daun");
+                  setProductFormUnit("kg");
+                  setProductFormPrice(12000);
+                  setProductFormAliases("");
+                  setIsAddProductModalOpen(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Tambah Komoditi Baru</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2693,10 +2924,26 @@ export default function SellerDashboardPage() {
                     <Link
                       href={`/produk/${p.publicId}`}
                       target="_blank"
-                      className="flex-1 py-2 px-3 rounded-lg bg-emerald-800 text-white font-semibold text-center hover:bg-emerald-900 flex items-center justify-center gap-1.5 transition"
+                      className="flex-1 py-2 px-2.5 rounded-lg bg-emerald-800 text-white font-semibold text-center hover:bg-emerald-900 flex items-center justify-center gap-1.5 transition text-[11px]"
                     >
-                      <QrCode className="w-3.5 h-3.5" /> Paspor & QR
+                      <QrCode className="w-3.5 h-3.5" /> Paspor &amp; QR
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingProduct(p);
+                        setProductFormName(p.name);
+                        setProductFormCategory(p.category);
+                        setProductFormUnit(p.saleUnit);
+                        setProductFormPrice(p.priceIdr);
+                        setProductFormAliases(p.aliases || "");
+                        setIsAddProductModalOpen(true);
+                      }}
+                      className="py-2 px-2.5 rounded-lg bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-semibold text-center flex items-center justify-center gap-1 transition text-[11px]"
+                      title="Edit Komoditas Sayuran"
+                    >
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
                   </div>
                 </div>
               ))}
@@ -3203,6 +3450,144 @@ export default function SellerDashboardPage() {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+      {/* Modal Tambah / Edit Komoditi Produk */}
+      {isAddProductModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-emerald-800" />
+                  <span>{editingProduct ? "Edit Komoditi Sayuran" : "Tambah Komoditi Baru"}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {editingProduct
+                    ? `Perbarui detail atau harga jual ${editingProduct.name}`
+                    : "Tambahkan sayuran baru ke katalog kios dan paspor QR"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddProductModalOpen(false);
+                  setEditingProduct(null);
+                }}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">
+                  Nama Komoditi Sayuran *
+                </label>
+                <input
+                  type="text"
+                  list="indonesian-vegetable-suggestions"
+                  value={productFormName}
+                  onChange={(e) => setProductFormName(e.target.value)}
+                  placeholder="Contoh: Kangkung, Sawi Putih, Wortel Brastagi"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-bold text-slate-800"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Satuan Jual *</label>
+                  <select
+                    value={productFormUnit}
+                    onChange={(e) => setProductFormUnit(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="kg">kg (Kilo)</option>
+                    <option value="ikat">ikat</option>
+                    <option value="pack">pack</option>
+                    <option value="buah">buah</option>
+                    <option value="biji">biji</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Kategori *</label>
+                  <select
+                    value={productFormCategory}
+                    onChange={(e) => setProductFormCategory(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-white"
+                  >
+                    <option value="Sayuran Daun">Sayuran Daun</option>
+                    <option value="Cabai">Cabai</option>
+                    <option value="Buah &amp; Tomat">Buah &amp; Tomat</option>
+                    <option value="Bumbu &amp; Umbi">Bumbu &amp; Umbi</option>
+                    <option value="Polong">Polong</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">
+                  Harga Jual Ritel Kios (Rp) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
+                  <input
+                    type="number"
+                    value={productFormPrice}
+                    onChange={(e) => setProductFormPrice(parseInt(e.target.value) || 0)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-bold text-emerald-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">
+                  Panggilan / Alias Chat Pembeli (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={productFormAliases}
+                  onChange={(e) => setProductFormAliases(e.target.value)}
+                  placeholder="Contoh: kangkung, kangkung air, sayur kangkung"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Membantu AI WhatsApp langsung mengenali variasi nama yang diketik pelanggan.
+                </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddProductModalOpen(false);
+                    setEditingProduct(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingProductForm}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-black flex items-center gap-1.5 shadow-sm transition disabled:opacity-50"
+                >
+                  {submittingProductForm ? (
+                    <span>Menyimpan...</span>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>{editingProduct ? "Simpan Perubahan" : "Tambah ke Katalog"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

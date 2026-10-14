@@ -268,6 +268,68 @@ export const dataStore = {
     return prod;
   },
 
+  createOrUpdateProduct(input: {
+    id?: string;
+    name: string;
+    category?: string;
+    saleUnit?: string;
+    priceIdr?: number;
+    aliases?: string;
+    description?: string;
+    published?: boolean;
+  }): Product {
+    const trimmedName = input.name.trim();
+    if (!trimmedName) throw new Error("Nama komoditi sayuran wajib diisi");
+
+    let prod = input.id ? db.products.find((p) => p.id === input.id) : null;
+    if (!prod) {
+      prod = db.products.find(
+        (p) => p.name.toLowerCase() === trimmedName.toLowerCase()
+      ) || null;
+    }
+
+    if (prod) {
+      // Update existing
+      prod.name = trimmedName;
+      if (input.category) prod.category = input.category;
+      if (input.saleUnit) prod.saleUnit = input.saleUnit;
+      if (input.priceIdr !== undefined && input.priceIdr >= 0) prod.priceIdr = input.priceIdr;
+      if (input.aliases) prod.aliases = input.aliases;
+      if (input.description) prod.description = input.description;
+      if (input.published !== undefined) prod.published = input.published;
+      prod.updatedAt = new Date().toISOString();
+      persistDbToDisk(db);
+      return prod;
+    }
+
+    // Create new product
+    const slug = trimmedName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || `sayur-${Date.now().toString().slice(-4)}`;
+    const newId = `prod-${slug}-${Date.now().toString().slice(-4)}`;
+    const newPublicId = `prod-${slug}`;
+
+    const newProd: Product = {
+      id: newId,
+      shopId: "shop-berkah-mandiri",
+      publicId: newPublicId,
+      name: trimmedName,
+      aliases: input.aliases || trimmedName.toLowerCase(),
+      category: input.category || "Sayuran Daun",
+      saleUnit: input.saleUnit || "kg",
+      priceIdr: input.priceIdr !== undefined && input.priceIdr >= 0 ? input.priceIdr : 10000,
+      published: input.published !== undefined ? input.published : true,
+      description: input.description || `Komoditi sayuran ${trimmedName} segar langsung dari kebun mitra petani lokal.`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    db.products.push(newProd);
+    persistDbToDisk(db);
+    return newProd;
+  },
+
   // --- BATCH & BARANG MASUK (Blueprint Section 10.1) ---
   getBatches(productId?: string) {
     let list = db.batches;
