@@ -61,8 +61,10 @@ export function Navbar() {
           {/* Language Switcher Pill */}
           <div className="flex items-center bg-emerald-900/90 rounded-lg p-0.5 border border-emerald-700/80 text-xs font-semibold shrink-0" title={t.langSwitchTitle}>
             <button
+              id="btn-lang-id"
+              type="button"
               onClick={() => setLang("id")}
-              className={`px-2 py-0.5 rounded-md transition text-[11px] sm:text-xs ${
+              className={`px-2 py-0.5 rounded-md transition text-[11px] sm:text-xs cursor-pointer ${
                 lang === "id"
                   ? "bg-lime-400 text-emerald-950 shadow-xs font-bold"
                   : "text-emerald-300 hover:text-white"
@@ -71,8 +73,10 @@ export function Navbar() {
               ID
             </button>
             <button
+              id="btn-lang-en"
+              type="button"
               onClick={() => setLang("en")}
-              className={`px-2 py-0.5 rounded-md transition text-[11px] sm:text-xs ${
+              className={`px-2 py-0.5 rounded-md transition text-[11px] sm:text-xs cursor-pointer ${
                 lang === "en"
                   ? "bg-lime-400 text-emerald-950 shadow-xs font-bold"
                   : "text-emerald-300 hover:text-white"

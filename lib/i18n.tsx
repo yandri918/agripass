@@ -430,12 +430,36 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setIsMounted(true);
     if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlLang = urlParams.get("lang") as Language;
+      if (urlLang === "id" || urlLang === "en") {
+        setLangState(urlLang);
+        localStorage.setItem("agripass_lang", urlLang);
+        document.documentElement.lang = urlLang;
+        return;
+      }
       const savedLang = localStorage.getItem("agripass_lang") as Language;
       if (savedLang === "id" || savedLang === "en") {
         setLangState(savedLang);
         document.documentElement.lang = savedLang;
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const handleSync = () => {
+      const saved = localStorage.getItem("agripass_lang") as Language;
+      if (saved === "id" || saved === "en") {
+        setLangState(saved);
+        document.documentElement.lang = saved;
+      }
+    };
+    window.addEventListener("storage", handleSync);
+    window.addEventListener("agripass_lang_change", handleSync);
+    return () => {
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener("agripass_lang_change", handleSync);
+    };
   }, []);
 
   const setLang = (newLang: Language) => {
