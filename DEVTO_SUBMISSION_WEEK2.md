@@ -8,6 +8,10 @@ tags: devchallenge, hf26challenge, hacktoberfest, gemma
 
 ---
 
+![AgriPass AI: From Farm Gate Intake to WhatsApp Order Fulfillment](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/agripass-hero-banner.jpg)
+
+---
+
 ## What I Built
 
 ### The Problem: The Invisible Bleed of Neighborhood Produce Kiosks
@@ -28,6 +32,9 @@ These micro-entrepreneurs are the backbone of local food security. Yet, their si
 ### The Solution: AgriPass AI
 
 **AgriPass AI** is an intelligent, lightweight operating system and micro-SaaS designed specifically for grassroots fresh produce kiosks. It bridges physical morning intake at the crate to digital order fulfillment via WhatsApp and public QR passports:
+
+![AgriPass AI Visual Produce Inspection](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/agripass-produce-inspection.jpg)
+*Figure 1: Smart produce intake with open-weight computer vision freshness grading and instant batch QR passport generation.*
 
 ```
 [4:30 AM Farm Gate Intake]
@@ -57,6 +64,19 @@ Neighborhood produce kiosk owners, market stall operators, and urban vegetable d
 * 🔐 **Seller Control Portal:** [https://web-production-43e15.up.railway.app/seller](https://web-production-43e15.up.railway.app/seller) *(Demo Seller PIN: `1234`)*
 * 🏷️ **Live Batch QR Passport Example:** [https://web-production-43e15.up.railway.app/batch/batch-bayam-01](https://web-production-43e15.up.railway.app/batch/batch-bayam-01)
 * 🌐 **Full Bilingual Experience:** Instant 1-click toggle between **Bahasa Indonesia (ID)** and **English (EN)** across all storefronts and management dashboards.
+
+![AgriPass AI WhatsApp Order Drafter](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/agripass-wa-order-extractor.jpg)
+*Figure 2: Conversational WhatsApp customer messages transformed into structured digital shopping carts with automatic price and stock verification.*
+
+### Visual Walkthrough & Screenshots from Live Deployment
+
+| 🛒 Public Fresh Produce Catalog | 💬 WhatsApp AI Order Extraction Modal |
+| :---: | :---: |
+| ![Storefront Catalog](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/app-storefront-catalog.png) | ![AI Order Modal](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/app-ai-order-modal.png) |
+
+| 🏷️ Batch QR Traceability Passport | 📊 Seller Stock & Loss Audit Dashboard |
+| :---: | :---: |
+| ![Batch Passport](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/app-qr-batch-passport.png) | ![Seller Inventory Dashboard](https://raw.githubusercontent.com/yandri918/agripass/main/public/images/agripass-inventory-dashboard.jpg) |
 
 ### Interactive Features to Try in the Demo:
 
